@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "LiftLog",
-    "slug": "liftlog",
+    "name": "GainsLab",
+    "slug": "gainslab",
     "version": "1.0.0",
     "userInterfaceStyle": "automatic",
     "web": {
@@ -38,6 +38,7 @@
           "icon": "./assets/notification.png"
         }
       ],
+      "expo-secure-store",
       "expo-sqlite",
       [
         "expo-splash-screen",
@@ -47,17 +48,18 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "scheme": "liftlog",
+    "scheme": "gainslab",
     "android": {
       "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 1",
       "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.0.0\"}",
-      "package": "com.limajuice.liftlog",
+      "package": "com.gabsvm.gainslab",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "com.android.vending.BILLING",
@@ -75,7 +77,10 @@
               "host": "app.liftlog.online"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -85,8 +90,10 @@
       }
     },
     "ios": {
-      "bundleIdentifier": "com.limajuice.liftlog",
-      "associatedDomains": ["applinks:app.liftlog.online"],
+      "bundleIdentifier": "com.gabsvm.gainslab",
+      "associatedDomains": [
+        "applinks:app.liftlog.online"
+      ],
       "supportsTablet": true,
       "infoPlist": {
         "UIViewControllerBasedStatusBarAppearance": true,

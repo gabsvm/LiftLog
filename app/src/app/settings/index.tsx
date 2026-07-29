@@ -77,6 +77,18 @@ export default function Settings() {
             <List.Icon icon={'settingsBackupRestore'} {...props} />
           )}
         ></List.Item>
+        <List.Item
+          onPress={() => push('/settings/import-ironlog')}
+          title="Importar rutina de IronLog"
+          description="Traer programas de la PWA y conservar superseries"
+          left={(props) => <List.Icon icon={'download'} {...props} />}
+        ></List.Item>
+        <List.Item
+          onPress={() => push('/settings/cloud-sync')}
+          title="Cuenta y sincronizacion"
+          description="Conectar Supabase y sincronizar tus rutinas privadas"
+          left={(props) => <List.Icon icon={'cloudSync'} {...props} />}
+        ></List.Item>
       </List.Section>
 
       <List.Section title={t('settings.pro_features.title')}>
