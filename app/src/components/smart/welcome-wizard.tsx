@@ -1,19 +1,18 @@
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import ListSwitch from '@/components/presentation/foundation/list-switch';
+import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
+import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
 import SelectButton, {
   SelectButtonOption,
 } from '@/components/presentation/foundation/select-button';
-import ThemeChooser from '@/components/presentation/foundation/editors/theme-chooser';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { supportedLanguages } from '@/services/tolgee';
 import { useAppSelector } from '@/store';
 import {
-  setColorSchemeSeed,
   setFirstDayOfWeek,
   setPreferredLanguage,
   setRestNotifications,
   setShowFeed,
-  setTrueBlackDarkTheme,
   setUseImperialUnits,
   setWelcomeWizardCompleted,
 } from '@/store/settings';
@@ -21,12 +20,13 @@ import { getDateOnDay } from '@/utils/format-date';
 import { DayOfWeek } from '@js-joda/core';
 import { useTranslate } from '@tolgee/react';
 import { useMemo, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
-import { List, Portal, Text } from 'react-native-paper';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Card, List, Portal, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { requestPermissionsAsync } from 'expo-notifications';
+import { selectionAsync } from 'expo-haptics';
 import { HealthExportSwitch } from './health-export-switch';
 
 export function WelcomeWizard() {
@@ -71,10 +71,6 @@ export function WelcomeWizard() {
   const welcomeWizardCompleted = settings.welcomeWizardCompleted;
   const { colors } = useAppTheme();
   const [currentPage, setCurrentPage] = useState(0);
-  const openUrl = (url: string) => {
-    void Linking.canOpenURL(url).then(() => Linking.openURL(url));
-  };
-
   const languageOptions: SelectButtonOption<string | undefined>[] = useMemo(
     () => [
       {
@@ -89,6 +85,7 @@ export function WelcomeWizard() {
   const totalPages = 3;
 
   const handleNext = async () => {
+    await selectionAsync();
     if (currentPage < totalPages - 1) {
       setCurrentPage(currentPage + 1);
     } else {
@@ -105,32 +102,38 @@ export function WelcomeWizard() {
     }
   };
 
-  const renderCrashReportsPage = () => (
+  const renderWelcomePage = () => (
     <View style={styles.pageContent}>
+      <View style={styles.brand}>
+        <GainsLabWordmark />
+      </View>
       <View style={styles.headerSection}>
-        <Text variant="headlineMedium" style={styles.pageTitle}>
+        <Text variant="displaySmall" style={styles.pageTitle}>
           {t('onboarding.welcome.title')}
         </Text>
-        <Text variant="bodyLarge" style={styles.pageSubtitle}>
+        <Text
+          variant="bodyLarge"
+          style={[styles.pageSubtitle, { color: colors.onSurfaceVariant }]}
+        >
           {t('onboarding.welcome.subtitle')}
         </Text>
       </View>
-
-      <View style={styles.settingsSection}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          {t('onboarding.open_source.title')}
-        </Text>
-        <Text variant="bodyMedium" style={styles.sectionDescription}>
-          {t('onboarding.open_source.body')}
-        </Text>
-        <Button
-          onPress={() => openUrl('https://github.com/LiamMorrow/LiftLog')}
-        >
-          {t('onboarding.open_source.button')}
-        </Button>
-        <Button onPress={() => openUrl('https://liftlog.online/privacy.html')}>
-          {t('onboarding.privacy_policy.button')}
-        </Button>
+      <View style={styles.featureStack}>
+        <Feature
+          icon="edit"
+          title={t('onboarding.feature.track.title')}
+          body={t('onboarding.feature.track.body')}
+        />
+        <Feature
+          icon="analytics"
+          title={t('onboarding.feature.test.title')}
+          body={t('onboarding.feature.test.body')}
+        />
+        <Feature
+          icon="trendingUp"
+          title={t('onboarding.feature.grow.title')}
+          body={t('onboarding.feature.grow.body')}
+        />
       </View>
     </View>
   );
@@ -139,10 +142,10 @@ export function WelcomeWizard() {
     <View style={styles.pageContent}>
       <View style={styles.headerSection}>
         <Text variant="headlineMedium" style={styles.pageTitle}>
-          {t('settings.localisation.title')}
+          {t('onboarding.preferences.title')}
         </Text>
         <Text variant="bodyLarge" style={styles.pageSubtitle}>
-          {t('settings.localisation.subtitle')}
+          {t('onboarding.preferences.subtitle')}
         </Text>
       </View>
 
@@ -174,12 +177,6 @@ export function WelcomeWizard() {
               onChange={(value) => dispatch(setPreferredLanguage(value))}
             />
           )}
-        />
-        <ThemeChooser
-          seed={settings.colorSchemeSeed}
-          onUpdateTheme={(x) => dispatch(setColorSchemeSeed(x))}
-          setTrueBlack={(b) => dispatch(setTrueBlackDarkTheme(b))}
-          trueBlack={settings.trueBlackDarkTheme}
         />
       </View>
     </View>
@@ -227,7 +224,7 @@ export function WelcomeWizard() {
   const renderPage = () => {
     switch (currentPage) {
       case 0:
-        return renderCrashReportsPage();
+        return renderWelcomePage();
       case 1:
         return renderLocalizationPage();
       case 2:
@@ -240,8 +237,13 @@ export function WelcomeWizard() {
     !welcomeWizardCompleted && (
       <Portal>
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-          <View style={[styles.container]}>
-            {renderPage()}
+          <View style={styles.container}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {renderPage()}
+            </ScrollView>
 
             <View style={styles.footer}>
               <View style={styles.pageIndicator}>
@@ -289,23 +291,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageContent: {
-    flex: 1,
-    marginTop: spacing.pageHorizontalMargin,
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[6],
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  brand: {
+    marginBottom: spacing[8],
   },
   headerSection: {
-    marginBottom: spacing[8],
-    alignItems: 'center',
+    marginBottom: spacing[6],
   },
   pageTitle: {
-    textAlign: 'center',
+    fontWeight: '800',
+    letterSpacing: -1.4,
     marginBottom: spacing[2],
   },
   pageSubtitle: {
-    textAlign: 'center',
-    opacity: 0.7,
+    lineHeight: 25,
   },
   settingsSection: {
-    flex: 1,
+    gap: spacing[1],
+  },
+  featureStack: {
+    gap: spacing[3],
   },
   sectionTitle: {
     marginBottom: spacing[2],
@@ -321,9 +332,12 @@ const styles = StyleSheet.create({
     marginTop: spacing[6],
   },
   footer: {
-    padding: spacing.pageHorizontalMargin,
-    paddingBottom: spacing[8],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[5],
     marginTop: 'auto',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128, 128, 128, 0.22)',
   },
   pageIndicator: {
     flexDirection: 'row',
@@ -338,7 +352,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(128, 128, 128, 0.3)',
   },
   activeDot: {
-    backgroundColor: 'rgba(128, 128, 128, 0.8)',
+    backgroundColor: '#C6FF00',
     width: spacing[6],
   },
   buttonRow: {
@@ -348,5 +362,62 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+    minHeight: 48,
+  },
+  feature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[1],
+  },
+  featureIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
+
+function Feature({
+  icon,
+  title,
+  body,
+}: {
+  icon: 'edit' | 'analytics' | 'trendingUp';
+  title: string;
+  body: string;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Card
+      mode="contained"
+      style={{
+        backgroundColor: colors.surfaceContainer,
+        borderRadius: 18,
+      }}
+    >
+      <Card.Content style={styles.feature}>
+        <View
+          style={[
+            styles.featureIcon,
+            { backgroundColor: colors.primaryContainer },
+          ]}
+        >
+          <Icon source={icon} size={22} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text variant="titleMedium" style={{ fontWeight: '700' }}>
+            {title}
+          </Text>
+          <Text
+            variant="bodyMedium"
+            style={{ color: colors.onSurfaceVariant, marginTop: spacing[0.5] }}
+          >
+            {body}
+          </Text>
+        </View>
+      </Card.Content>
+    </Card>
+  );
+}

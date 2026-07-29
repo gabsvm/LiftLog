@@ -25,7 +25,11 @@ export default function FullHeightScrollView({
   const [floatingBottomSize, setFloatingBottomSize] = useState(0);
   const insets = useSafeAreaInsets();
   const headerHeight = useContext(HeaderHeightContext); // Intentionally don't use useHeaderHeight as it might not be in a stack
-  const topInsetHeight = Platform.select({ ios: headerHeight }) ?? 0;
+  const topInsetHeight =
+    Platform.select({
+      ios: headerHeight,
+      android: !headerHeight ? insets.top : 0,
+    }) ?? 0;
   const bottomInsetHeight =
     floatingBottomSize + (Platform.select({ ios: insets.bottom }) ?? 0);
 

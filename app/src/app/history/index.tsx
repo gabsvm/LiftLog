@@ -2,14 +2,17 @@ import CardActions from '@/components/presentation/foundation/card-actions';
 import CardList from '@/components/presentation/foundation/card-list';
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
 import EmptyInfo from '@/components/presentation/foundation/empty-info';
+import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
+import {
+  ScreenHeading,
+  SectionHeading,
+} from '@/components/presentation/foundation/screen-heading';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import HistoryCalendarCard from '@/components/presentation/summary/history-calendar-card';
 import LimitedHtml from '@/components/presentation/foundation/limited-html';
-import SessionSummary from '@/components/presentation/summary/session-summary';
 import SessionSummaryTitle from '@/components/presentation/summary/session-summary-title';
-import SplitCardControl from '@/components/presentation/foundation/split-card-control';
-import { spacing } from '@/hooks/useAppTheme';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Session } from '@/models/session-models';
 import { useAppSelector, useAppSelectorWithArg } from '@/store';
 import {
@@ -27,7 +30,8 @@ import { LocalDate, YearMonth } from '@js-joda/core';
 import { T, useTranslate } from '@tolgee/react';
 import { Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Card, Tooltip } from 'react-native-paper';
+import { StyleSheet, View } from 'react-native';
+import { Card, Text, Tooltip } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { useDispatch } from 'react-redux';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -35,6 +39,7 @@ import { SharedSession } from '@/models/feed-models';
 
 export default function History() {
   const { t } = useTranslate();
+  const { colors } = useAppTheme();
   const dispatch = useDispatch();
   const formatDate = useFormatDate();
   const [currentYearMonth, setCurrentYearMonth] = useState(YearMonth.now());
@@ -114,14 +119,23 @@ export default function History() {
       <Stack.Screen
         options={{
           title: t('generic.history.title'),
+          headerShown: false,
         }}
       />
       <FullHeightScrollView
         contentContainerStyle={{
           gap: spacing[4],
+          paddingTop: spacing[4],
+          paddingBottom: spacing[8],
           paddingHorizontal: spacing.pageHorizontalMargin,
         }}
       >
+        <GainsLabWordmark compact />
+        <ScreenHeading
+          eyebrow={t('generic.history.title').toUpperCase()}
+          title={t('generic.history.title')}
+          subtitle={t('screen.history.subtitle')}
+        />
         <HistoryCalendarCard
           currentYearMonth={currentYearMonth}
           sessions={sessions}
@@ -132,20 +146,49 @@ export default function History() {
           }}
           onSessionSelect={onSelectSession}
         />
+        <SectionHeading
+          title={t('workout.sessions_in_month.title')}
+          detail={`${sessionsInMonth.length}`}
+        />
         <CardList
           testID="history-list"
           items={sessionsInMonth}
           cardType="contained"
           renderItemContent={(session) => (
             <Card.Content>
-              <SplitCardControl
-                titleContent={
-                  <SessionSummaryTitle isFilled session={session} />
-                }
-                mainContent={
-                  <SessionSummary isFilled showWeight session={session} />
-                }
-              />
+              <SessionSummaryTitle isFilled session={session} />
+              <View style={styles.exercisePreview}>
+                {session.recordedExercises
+                  .slice(0, 3)
+                  .map((exercise, index) => (
+                    <View
+                      key={`${exercise.blueprint.name}-${index}`}
+                      style={styles.exerciseRow}
+                    >
+                      <Text
+                        variant="labelMedium"
+                        style={[
+                          styles.exerciseIndex,
+                          { color: colors.primary },
+                        ]}
+                      >
+                        {(index + 1).toString().padStart(2, '0')}
+                      </Text>
+                      <Text
+                        variant="bodyMedium"
+                        numberOfLines={1}
+                        style={{ flex: 1 }}
+                      >
+                        {exercise.blueprint.name}
+                      </Text>
+                    </View>
+                  ))}
+                {session.recordedExercises.length > 3 ? (
+                  <HistoryMoreCount
+                    count={session.recordedExercises.length - 3}
+                  />
+                ) : null}
+              </View>
             </Card.Content>
           )}
           renderItemActions={(session) => (
@@ -230,3 +273,33 @@ export default function History() {
     </>
   );
 }
+
+function HistoryMoreCount({ count }: { count: number }) {
+  const { colors } = useAppTheme();
+  const { t } = useTranslate();
+  return (
+    <Text
+      variant="labelMedium"
+      style={{ color: colors.onSurfaceVariant, marginTop: spacing[1] }}
+    >
+      {t('home.more_exercises', { count })}
+    </Text>
+  );
+}
+
+const styles = StyleSheet.create({
+  exercisePreview: {
+    gap: spacing[2],
+    marginTop: spacing[4],
+  },
+  exerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  exerciseIndex: {
+    width: 22,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+});

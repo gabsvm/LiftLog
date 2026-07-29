@@ -63,15 +63,7 @@ export class KeyValueStore {
   }
 
   private async readBytes(file: File): Promise<Uint8Array> {
-    const readBytes = new Uint8Array(file.size);
-    let offset = 0;
-    // This is probably slower than just using sync file.read, but it won't lock the UI thread...
-    for await (const bytesAny of file.readableStream().values()) {
-      const bytes = bytesAny as Uint8Array;
-      readBytes.set(bytes, offset);
-      offset += bytes.length;
-    }
-    return readBytes;
+    return file.bytes();
   }
 }
 

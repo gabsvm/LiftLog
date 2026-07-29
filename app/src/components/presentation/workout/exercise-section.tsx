@@ -1,5 +1,5 @@
 import ItemTitle from '@/components/presentation/foundation/item-title';
-import { spacing } from '@/hooks/useAppTheme';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import {
   RecordedExercise,
   RecordedWeightedExercise,
@@ -33,6 +33,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
   props: ExerciseSectionProps<T>,
 ) {
   const { updateExercise, onRemoveExercise } = props;
+  const { colors } = useAppTheme();
   const openUrl = (url: string) => {
     void Linking.canOpenURL(url).then(() => Linking.openURL(url));
   };
@@ -148,7 +149,11 @@ export default function ExerciseSection<T extends RecordedExercise>(
         gap: spacing[4],
         paddingBlock: spacing[4],
         paddingHorizontal: spacing.pageHorizontalMargin,
-        width: '100%',
+        marginHorizontal: spacing.pageHorizontalMargin,
+        marginBottom: spacing[3],
+        borderRadius: 20,
+        backgroundColor: colors.surfaceContainer,
+        overflow: 'hidden',
       }}
       testID="weighted-exercise"
     >

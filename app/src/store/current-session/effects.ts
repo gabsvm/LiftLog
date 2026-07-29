@@ -38,6 +38,7 @@ import {
 } from '@/models/storage/versions/latest';
 import { Duration, OffsetDateTime } from '@js-joda/core';
 import { Dispatch } from '@reduxjs/toolkit';
+import { Platform } from 'react-native';
 import { KeyValueStore } from '@/services/key-value-store';
 import { AnyVersionSessionJSON } from '@/models/storage/versions/any';
 import { copyLogs, showSnackbar } from '@/store/app';
@@ -51,18 +52,30 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
       if (!getState().settings.isHydrated) {
         throw new Error('Settings must be hydrated before stored sessions');
       }
+      // The legacy file restore can block the Android JS runtime before the
+      // first screen renders. Do not hold the whole app hostage to it.
+      if (Platform.OS === 'android') {
+        dispatch(setIsHydrated(true));
+        return;
+      }
       try {
-        const currentSessionVersion =
-          (await keyValueStore.getItem(`${storageKey}-Version`)) ?? '2';
+        await withTimeout(
+          async () => {
+            const currentSessionVersion =
+              (await keyValueStore.getItem(`${storageKey}-Version`)) ?? '2';
 
-        switch (currentSessionVersion) {
-          case '2':
-            await handleV2ProtoStorage(dispatch, keyValueStore, getState);
-            break;
-          case '3':
-            await handleV3JsonStorage(dispatch, keyValueStore);
-            break;
-        }
+            switch (currentSessionVersion) {
+              case '2':
+                await handleV2ProtoStorage(dispatch, keyValueStore, getState);
+                break;
+              case '3':
+                await handleV3JsonStorage(dispatch, keyValueStore);
+                break;
+            }
+          },
+          8_000,
+          'Timed out while restoring the current session',
+        );
 
         dispatch(setIsHydrated(true));
       } catch (e) {
@@ -256,6 +269,24 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
       dispatch(setCurrentSession({ session, target: action.payload.target }));
     },
   );
+}
+
+async function withTimeout<T>(
+  operation: () => Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }
 
 function fromCurrentSessionDao(
