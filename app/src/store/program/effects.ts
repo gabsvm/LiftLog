@@ -23,7 +23,7 @@ import { toRecord } from '@/utils/reduce';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { TaskAbortError } from '@reduxjs/toolkit';
 
-const builtInProgramsStorageKey = 'hasSavedDefaultPlans2';
+const builtInProgramsStorageKey = 'hasSavedDefaultPlans3';
 export function applyProgramEffects(addEffect: AddEffectFn) {
   addEffect(
     initializeProgramStateSlice,
