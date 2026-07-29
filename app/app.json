@@ -3,14 +3,15 @@
     "name": "GainsLab",
     "slug": "gainslab",
     "version": "1.0.0",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/gainslab-favicon.png"
     },
-    "icon": "./assets/icon.png",
-    "backgroundColor": "#fcfdf6",
-    "primaryColor": "#046F03",
+    "icon": "./assets/gainslab-icon.png",
+    "backgroundColor": "#1A1A1D",
+    "primaryColor": "#C6FF00",
     "plugins": [
       "expo-router",
       [
@@ -24,7 +25,7 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": false,
-          "NSHealthUpdateUsageDescription": "LiftLog would like to share your workout and/or body weight with Apple Health.",
+          "NSHealthUpdateUsageDescription": "GainsLab necesita compartir tus entrenamientos y peso corporal con Apple Health.",
           "background": false
         }
       ],
@@ -35,7 +36,8 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification.png"
+          "icon": "./assets/gainslab-monochrome.png",
+          "color": "#C6FF00"
         }
       ],
       "expo-secure-store",
@@ -43,8 +45,8 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#fcfdf6",
-          "image": "./assets/splash.png",
+          "backgroundColor": "#1A1A1D",
+          "image": "./assets/gainslab-logo.png",
           "resizeMode": "contain"
         }
       ],
@@ -84,9 +86,9 @@
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#dfedda",
-        "foregroundImage": "./assets/icon_foreground.png",
-        "monochromeImage": "./assets/icon_monochrome.png"
+        "backgroundColor": "#1A1A1D",
+        "foregroundImage": "./assets/gainslab-icon.png",
+        "monochromeImage": "./assets/gainslab-monochrome.png"
       }
     },
     "ios": {
