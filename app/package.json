@@ -1,7 +1,7 @@
 {
   "name": "liftlog-react",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "scripts": {
     "start": "expo start",
     "prebuild": "expo prebuild",
@@ -28,7 +28,6 @@
     "@material-symbols-react-native/outlined-400": "^1.0.0",
     "@microsoft/signalr": "^10.0.0",
     "@pchmn/expo-material3-theme": "^1.4.0",
-    "@react-native-vector-icons/material-design-icons": "^13.1.2",
     "@reduxjs/toolkit": "^2.11.2",
     "@shopify/react-native-skia": "2.6.2",
     "@supabase/supabase-js": "^2.111.0",

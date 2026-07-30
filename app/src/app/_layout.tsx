@@ -13,6 +13,12 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useTranslate } from '@tolgee/react';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+
+void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
+  console.warn('Could not keep the native splash screen visible.', error);
+});
 
 // QuickCrypto powers encrypted inbox features, but it must not prevent the
 // application shell from starting when a native initialization fails.
@@ -37,6 +43,15 @@ if (Platform.OS !== 'web') {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    // If native service creation fails before AppStateProvider mounts, never
+    // leave the user trapped behind the operating-system splash indefinitely.
+    const fallback = setTimeout(() => {
+      void SplashScreen.hideAsync();
+    }, 3_500);
+    return () => clearTimeout(fallback);
+  }, []);
+
   return (
     <GestureHandlerRootView>
       <PreventNavigateProvider>

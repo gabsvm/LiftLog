@@ -119,17 +119,36 @@ export function applySettingsEffects(addEffect: AddEffectFn) {
       dispatch(setShowPostWorkoutSummary(showPostWorkoutSummary));
       dispatch(setTrueBlackDarkTheme(trueBlackDarkTheme));
 
-      if (Platform.OS === 'ios') {
-        Purchases.configure({
-          apiKey: process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY!,
-        });
-      } else if (Platform.OS === 'android') {
-        Purchases.configure({
-          apiKey: process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY!,
-        });
+      const rawRevenueCatApiKey: unknown =
+        Platform.OS === 'ios'
+          ? process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY
+          : process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY;
+      const revenueCatApiKey =
+        typeof rawRevenueCatApiKey === 'string'
+          ? rawRevenueCatApiKey.trim()
+          : '';
+      let purchasesConfigured = false;
+      if (revenueCatApiKey) {
+        try {
+          Purchases.configure({ apiKey: revenueCatApiKey });
+          purchasesConfigured = true;
+        } catch (error) {
+          logger.error(
+            'RevenueCat could not be configured; purchases are disabled.',
+            error,
+          );
+        }
+      } else {
+        logger.info(
+          'RevenueCat API key is not configured; purchases are disabled.',
+        );
       }
       // migrate pro token to a revenuecat
-      if (proToken && !proToken.startsWith('$RCAnonymousID')) {
+      if (
+        purchasesConfigured &&
+        proToken &&
+        !proToken.startsWith('$RCAnonymousID')
+      ) {
         try {
           const customerInfo = await Purchases.getCustomerInfo();
           await Purchases.syncPurchases();

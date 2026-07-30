@@ -2,15 +2,15 @@
   "expo": {
     "name": "GainsLab",
     "slug": "gainslab",
-    "version": "1.0.0",
+    "version": "1.1.1",
     "userInterfaceStyle": "dark",
     "web": {
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/gainslab-favicon.png"
     },
-    "icon": "./assets/gainslab-icon.png",
-    "backgroundColor": "#1A1A1D",
+    "icon": "./assets/gainslab-icon-clean.png",
+    "backgroundColor": "#0B0D0C",
     "primaryColor": "#C6FF00",
     "plugins": [
       "expo-router",
@@ -45,9 +45,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1A1A1D",
-          "image": "./assets/gainslab-logo.png",
-          "resizeMode": "contain"
+          "backgroundColor": "#0B0D0C",
+          "image": "./assets/gainslab-splash.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0B0D0C",
+            "image": "./assets/gainslab-splash.png"
+          }
         }
       ],
       "expo-status-bar",
@@ -59,8 +64,8 @@
     },
     "scheme": "gainslab",
     "android": {
-      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 1",
-      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.0.0\"}",
+      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 2",
+      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.1.1\"}",
       "package": "com.gabsvm.gainslab",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
@@ -86,9 +91,9 @@
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#1A1A1D",
-        "foregroundImage": "./assets/gainslab-icon.png",
-        "monochromeImage": "./assets/gainslab-monochrome.png"
+        "backgroundColor": "#0B0D0C",
+        "foregroundImage": "./assets/gainslab-adaptive-foreground.png",
+        "monochromeImage": "./assets/gainslab-monochrome-clean.png"
       }
     },
     "ios": {

@@ -4,6 +4,7 @@ import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
+import { Loader } from '@/components/presentation/foundation/loader';
 import {
   ScreenHeading,
   SectionHeading,
@@ -342,6 +343,33 @@ function WorkoutCard({
   );
 }
 
+function HomeLoadingState() {
+  const { colors } = useAppTheme();
+  const { t } = useTranslate();
+
+  return (
+    <View style={styles.screen}>
+      <GainsLabWordmark compact />
+      <ScreenHeading
+        eyebrow={t('home.eyebrow')}
+        title={t('home.title')}
+        subtitle={t('home.subtitle')}
+      />
+      <Card
+        mode="contained"
+        style={[
+          styles.loadingCard,
+          { backgroundColor: colors.surfaceContainer },
+        ]}
+      >
+        <Card.Content style={styles.loadingCardContent}>
+          <Loader loadingText={t('startup.finalizing')} />
+        </Card.Content>
+      </Card>
+    </View>
+  );
+}
+
 export default function Index() {
   const upcomingSessions = useAppSelector((s) => s.program.upcomingSessions);
   const dispatch = useDispatch();
@@ -379,6 +407,7 @@ export default function Index() {
       <MigrateToWeightUnitsWizard />
       <Remote
         value={upcomingSessions}
+        loading={() => <HomeLoadingState />}
         success={(upcoming) => {
           return (
             <ListUpcomingWorkouts
@@ -476,5 +505,13 @@ const styles = StyleSheet.create({
   freeformButton: {
     marginTop: spacing[2],
     marginBottom: spacing[3],
+  },
+  loadingCard: {
+    minHeight: 180,
+    borderRadius: 22,
+  },
+  loadingCardContent: {
+    minHeight: 180,
+    justifyContent: 'center',
   },
 });
