@@ -1,5 +1,6 @@
 package com.gabsvm.liftlog.nativeapp.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.health.connect.client.PermissionController
@@ -7,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +39,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,8 +48,20 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -75,6 +91,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.gabsvm.liftlog.nativeapp.R
 import com.gabsvm.liftlog.nativeapp.HealthConnectBridge
 import com.liftlog.shared.domain.ExerciseType
 import com.liftlog.shared.domain.ExerciseDefinition
@@ -102,17 +120,32 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 
+private enum class NativeRoute {
+    TRAIN,
+    PROGRESS,
+    HISTORY,
+    ROUTINES,
+    EXERCISES,
+    MORE,
+}
+
 @Composable
 fun LiftLogNativeApp(viewModel: WorkoutViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val restTimer by viewModel.restTimer.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var showStats by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var showRoutines by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var showExercises by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var showSettings by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var showHistory by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var routeStack by remember { mutableStateOf(listOf(NativeRoute.TRAIN)) }
+    val route = routeStack.last()
+    fun navigateTo(destination: NativeRoute) {
+        routeStack = routeStack + destination
+    }
+    fun switchTo(destination: NativeRoute) {
+        routeStack = listOf(destination)
+    }
+    fun goBack() {
+        if (routeStack.size > 1) routeStack = routeStack.dropLast(1)
+    }
     var healthSessionId by rememberSaveable { mutableStateOf<String?>(null) }
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -133,6 +166,10 @@ fun LiftLogNativeApp(viewModel: WorkoutViewModel) {
     }
     val selectedSession = state.selectedSessionId?.let { id ->
         state.sessions.firstOrNull { it.id == id }
+    }
+
+    BackHandler(enabled = selectedSession != null || routeStack.size > 1) {
+        if (selectedSession != null) viewModel.closeSession() else goBack()
     }
 
     when {
@@ -187,14 +224,14 @@ fun LiftLogNativeApp(viewModel: WorkoutViewModel) {
                 }
             },
         )
-        showStats -> NativeProgressScreen(
+        route == NativeRoute.PROGRESS -> NativeProgressScreen(
             sessions = state.sessions,
-            onBack = { showStats = false },
-            onTrain = { showStats = false },
-            onHistory = { showStats = false; showHistory = true },
-            onMore = { showStats = false; showSettings = true },
+            onBack = ::goBack,
+            onTrain = { switchTo(NativeRoute.TRAIN) },
+            onHistory = { switchTo(NativeRoute.HISTORY) },
+            onMore = { switchTo(NativeRoute.MORE) },
         )
-        showHistory -> NativeHistoryScreen(
+        route == NativeRoute.HISTORY -> NativeHistoryScreen(
             sessions = state.sessions,
             isImporting = state.isImporting,
             isExporting = state.isExporting,
@@ -204,22 +241,22 @@ fun LiftLogNativeApp(viewModel: WorkoutViewModel) {
             onExport = { exportPicker.launch("liftlog-native-backup.json") },
             onOpenSession = viewModel::openSession,
             onDeleteSession = viewModel::deleteSession,
-            onStats = { showHistory = false; showStats = true },
-            onRoutines = { showHistory = false; showRoutines = true },
-            onExercises = { showHistory = false; showExercises = true },
-            onSettings = { showHistory = false; showSettings = true },
+            onStats = { switchTo(NativeRoute.PROGRESS) },
+            onRoutines = { navigateTo(NativeRoute.ROUTINES) },
+            onExercises = { navigateTo(NativeRoute.EXERCISES) },
+            onSettings = { switchTo(NativeRoute.MORE) },
             onNewSession = viewModel::createEmptySession,
-            onBack = { showHistory = false },
-            onTrain = { showHistory = false },
-            onProgress = { showHistory = false; showStats = true },
-            onMore = { showHistory = false; showSettings = true },
+            onBack = ::goBack,
+            onTrain = { switchTo(NativeRoute.TRAIN) },
+            onProgress = { switchTo(NativeRoute.PROGRESS) },
+            onMore = { switchTo(NativeRoute.MORE) },
         )
-        showRoutines -> RoutineListScreen(
+        route == NativeRoute.ROUTINES -> RoutineListScreen(
             routines = state.routines,
             folders = state.templateFolders,
             availableExercises = state.exercises.filterNot(ExerciseDefinition::isArchived),
             error = state.error,
-            onBack = { showRoutines = false },
+            onBack = ::goBack,
             onStartEmpty = viewModel::createEmptySession,
             onStart = viewModel::startRoutine,
             onDelete = viewModel::deleteRoutine,
@@ -228,23 +265,23 @@ fun LiftLogNativeApp(viewModel: WorkoutViewModel) {
             onDeleteFolder = viewModel::deleteTemplateFolder,
             onMoveToFolder = viewModel::moveRoutineToFolder,
         )
-        showExercises -> ExerciseLibraryScreen(
+        route == NativeRoute.EXERCISES -> ExerciseLibraryScreen(
             exercises = state.exercises,
             error = state.error,
-            onBack = { showExercises = false },
+            onBack = ::goBack,
             onSave = viewModel::saveExercise,
             onArchive = viewModel::archiveExercise,
         )
-        showSettings -> NativeMoreScreen(
+        route == NativeRoute.MORE -> NativeMoreScreen(
             settings = settings,
             isImporting = state.isImporting,
             isExporting = state.isExporting,
-            onBack = { showSettings = false },
-            onTrain = { showSettings = false },
-            onProgress = { showSettings = false; showStats = true },
-            onHistory = { showSettings = false; showHistory = true },
-            onRoutines = { showSettings = false; showRoutines = true },
-            onExercises = { showSettings = false; showExercises = true },
+            onBack = ::goBack,
+            onTrain = { switchTo(NativeRoute.TRAIN) },
+            onProgress = { switchTo(NativeRoute.PROGRESS) },
+            onHistory = { switchTo(NativeRoute.HISTORY) },
+            onRoutines = { navigateTo(NativeRoute.ROUTINES) },
+            onExercises = { navigateTo(NativeRoute.EXERCISES) },
             onImport = { filePicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
             onExport = { exportPicker.launch("liftlog-native-backup.json") },
             onSaveDefaultRest = viewModel::saveDefaultRestSeconds,
@@ -264,13 +301,13 @@ fun LiftLogNativeApp(viewModel: WorkoutViewModel) {
             onExport = { exportPicker.launch("liftlog-native-backup.json") },
             onOpenSession = viewModel::openSession,
             onStartRoutine = viewModel::startRoutine,
-            onStats = { showStats = true },
-            onHistory = { showHistory = true },
-            onRoutines = { showRoutines = true },
-            onExercises = { showExercises = true },
-            onSettings = { showSettings = true },
+            onStats = { switchTo(NativeRoute.PROGRESS) },
+            onHistory = { switchTo(NativeRoute.HISTORY) },
+            onRoutines = { switchTo(NativeRoute.ROUTINES) },
+            onExercises = { switchTo(NativeRoute.EXERCISES) },
+            onSettings = { switchTo(NativeRoute.MORE) },
             onNewSession = viewModel::createEmptySession,
-            onBack = { showHistory = true },
+            onBack = { switchTo(NativeRoute.HISTORY) },
         )
     }
 }
@@ -328,26 +365,26 @@ private fun TrainingHomeScreen(
                 NavigationBarItem(
                     selected = true,
                     onClick = {},
-                    icon = { Icon(Icons.Filled.FitnessCenter, contentDescription = "Train") },
-                    label = { Text("Train") },
+                    icon = { Icon(Icons.Filled.FitnessCenter, contentDescription = stringResource(R.string.nav_train)) },
+                    label = { Text(stringResource(R.string.nav_train)) },
                 )
                 NavigationBarItem(
                     selected = false,
                     onClick = onStats,
-                    icon = { Icon(Icons.Filled.TrendingUp, contentDescription = "Progress") },
-                    label = { Text("Progress") },
+                    icon = { Icon(Icons.Filled.TrendingUp, contentDescription = stringResource(R.string.nav_progress)) },
+                    label = { Text(stringResource(R.string.nav_progress)) },
                 )
                 NavigationBarItem(
                     selected = false,
                     onClick = onHistory,
-                    icon = { Icon(Icons.Filled.History, contentDescription = "History") },
-                    label = { Text("History") },
+                    icon = { Icon(Icons.Filled.History, contentDescription = stringResource(R.string.nav_history)) },
+                    label = { Text(stringResource(R.string.nav_history)) },
                 )
                 NavigationBarItem(
                     selected = false,
                     onClick = onSettings,
-                    icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = "More") },
-                    label = { Text("More") },
+                    icon = { Icon(Icons.Filled.MoreHoriz, contentDescription = stringResource(R.string.nav_more)) },
+                    label = { Text(stringResource(R.string.nav_more)) },
                 )
             }
         },
@@ -366,17 +403,17 @@ private fun TrainingHomeScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "TODAY'S TRAINING",
+                        stringResource(R.string.home_today_training),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        "Ready to train?",
+                        stringResource(R.string.home_ready),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
                     )
                     Text(
-                        "Your plan, your numbers, your next best set.",
+                        stringResource(R.string.home_subtitle),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -384,42 +421,43 @@ private fun TrainingHomeScreen(
             item {
                 TrainingPlanCard(
                     planName = routines.firstOrNull()?.description?.takeIf { it.isNotBlank() }
-                        ?: "No plan selected",
+                        ?: stringResource(R.string.home_no_plan),
                     onChoose = onRoutines,
                     onEdit = onRoutines,
                 )
             }
             if (activeSession != null) {
                 item {
-                    HomeSectionHeading("CURRENT WORKOUT", activeSession.name)
+                    HomeSectionHeading(stringResource(R.string.home_current_workout), activeSession.name)
                 }
                 item {
                     NativeWorkoutCard(
                         session = activeSession,
-                        actionLabel = "Resume workout",
+                        actionLabel = stringResource(R.string.home_resume_workout),
                         onClick = { onOpenSession(activeSession.id) },
                     )
                 }
             }
-            if (routines.isNotEmpty()) {
+            val nextRoutine = routines.firstOrNull { it.name != activeSession?.name }
+            if (nextRoutine != null) {
                 item {
-                    HomeSectionHeading("UP NEXT", "Pick up where your plan left off")
+                    HomeSectionHeading(stringResource(R.string.home_up_next), stringResource(R.string.home_up_next_subtitle))
                 }
-                items(routines.take(1), key = { it.id }) { routine ->
+                item(key = nextRoutine.id) {
                     NativeRoutineCard(
-                        routine = routine,
-                        actionLabel = "Start workout",
-                        onClick = { onStartRoutine(routine.id) },
+                        routine = nextRoutine,
+                        actionLabel = stringResource(R.string.home_start_workout),
+                        onClick = { onStartRoutine(nextRoutine.id) },
                     )
                 }
-            } else if (cards.isNotEmpty()) {
+            } else if (activeSession == null && cards.isNotEmpty()) {
                 item {
-                    HomeSectionHeading("UP NEXT", "Pick up where your plan left off")
+                    HomeSectionHeading(stringResource(R.string.home_up_next), stringResource(R.string.home_up_next_subtitle))
                 }
                 items(cards, key = { it.id }) { session ->
                     NativeWorkoutCard(
                         session = session,
-                        actionLabel = if (session.completedAtEpochMillis == null) "Start workout" else "Train",
+                        actionLabel = if (session.completedAtEpochMillis == null) stringResource(R.string.home_start_workout) else stringResource(R.string.home_train),
                         onClick = { onOpenSession(session.id) },
                     )
                 }
@@ -439,7 +477,7 @@ private fun TrainingHomeScreen(
                 androidx.compose.material3.OutlinedButton(
                     onClick = onNewSession,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Freeform workout") }
+                ) { Text(stringResource(R.string.home_freeform)) }
             }
             item { Spacer(Modifier.height(16.dp)) }
         }
@@ -447,7 +485,63 @@ private fun TrainingHomeScreen(
 }
 
 @Composable
+private fun BrokenGainsLabWordmarkNative(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "↗",
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+            )
+        }
+        Text(
+            "GainsLab",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+        )
+    }
+}
+
+@Composable
 private fun GainsLabWordmarkNative(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "\u2197",
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+            )
+        }
+        Text(
+            "GainsLab",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+        )
+    }
+}
+
+@Composable
+private fun LegacyGainsLabWordmarkNative(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -507,19 +601,19 @@ private fun TrainingPlanCard(planName: String, onChoose: () -> Unit, onEdit: () 
                     .height(40.dp)
                     .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(13.dp)),
                 contentAlignment = Alignment.Center,
-            ) { Text("[]", color = MaterialTheme.colorScheme.primary) }
+            ) { Icon(Icons.Filled.List, contentDescription = stringResource(R.string.home_current_program), tint = MaterialTheme.colorScheme.primary) }
             Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "CURRENT PROGRAM",
+                    stringResource(R.string.home_current_program),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                 )
                 Text(planName, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            TextButton(onClick = onChoose) { Text("View") }
-            TextButton(onClick = onEdit) { Text("Edit") }
+            TextButton(onClick = onChoose) { Text(stringResource(R.string.home_view)) }
+            TextButton(onClick = onEdit) { Text(stringResource(R.string.home_edit)) }
         }
     }
 }
@@ -539,8 +633,8 @@ private fun NativeWorkoutCard(session: WorkoutSession, actionLabel: String, onCl
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
             )
-            Text(
-                "${session.exercises.size} exercises",
+                Text(
+                    stringResource(R.string.unit_exercises, session.exercises.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -568,8 +662,8 @@ private fun NativeWorkoutCard(session: WorkoutSession, actionLabel: String, onCl
                 }
             }
             if (session.exercises.size > 4) {
-                Text(
-                    "+${session.exercises.size - 4} more",
+                    Text(
+                        stringResource(R.string.unit_more, session.exercises.size - 4),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -599,8 +693,8 @@ private fun NativeRoutineCard(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
             )
-            Text(
-                routine.exercises.size.toString() + " exercises",
+                Text(
+                    stringResource(R.string.unit_exercises, routine.exercises.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -627,7 +721,7 @@ private fun NativeRoutineCard(
             }
             if (routine.exercises.size > 4) {
                 Text(
-                    "+" + (routine.exercises.size - 4) + " more",
+                    stringResource(R.string.unit_more, routine.exercises.size - 4),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -653,13 +747,13 @@ private fun NativeEmptyHomeCard(onNewSession: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("No workouts yet", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.home_no_workouts), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Start a freeform workout to begin tracking.",
+                stringResource(R.string.home_start_tracking),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             androidx.compose.material3.OutlinedButton(onClick = onNewSession) {
-                Text("Start workout")
+                Text(stringResource(R.string.home_start))
             }
         }
     }
@@ -1050,7 +1144,17 @@ private fun NativeProgressScreen(
     onHistory: () -> Unit,
     onMore: () -> Unit,
 ) {
-    val stats = WorkoutStatisticsCalculator.calculate(sessions)
+    var selectedPeriodDays by rememberSaveable { mutableStateOf(90) }
+    var showPeriodMenu by remember { mutableStateOf(false) }
+    val periodCutoff = if (selectedPeriodDays == 0) {
+        null
+    } else {
+        System.currentTimeMillis() - selectedPeriodDays * 24L * 60L * 60L * 1_000L
+    }
+    val visibleSessions = sessions.filter { session ->
+        periodCutoff == null || session.startedAtEpochMillis >= periodCutoff
+    }
+    val stats = WorkoutStatisticsCalculator.calculate(visibleSessions)
     val hasTrainingData = stats.totalSessions > 0 || stats.totalSets > 0
     var selectedExerciseId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedMetric by rememberSaveable { mutableStateOf("WEIGHT") }
@@ -1080,14 +1184,43 @@ private fun NativeProgressScreen(
             item { GainsLabWordmarkNative(modifier = Modifier.padding(top = 16.dp)) }
             item {
                 NativeScreenHeading(
-                    eyebrow = "PROGRESS",
-                    title = "Statistics",
-                    subtitle = "See the signal behind every session.",
+                    eyebrow = stringResource(R.string.progress_eyebrow),
+                    title = stringResource(R.string.progress_title),
+                    subtitle = stringResource(R.string.progress_subtitle),
                 )
             }
             item {
-                androidx.compose.material3.OutlinedButton(onClick = {}) {
-                    Text("Last 90 days")
+                Box {
+                    OutlinedButton(onClick = { showPeriodMenu = true }) {
+                        Text(
+                            when (selectedPeriodDays) {
+                                30 -> stringResource(R.string.period_30)
+                                365 -> stringResource(R.string.period_year)
+                                else -> if (selectedPeriodDays == 0) stringResource(R.string.period_all) else stringResource(R.string.period_90)
+                            },
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showPeriodMenu,
+                        onDismissRequest = { showPeriodMenu = false },
+                    ) {
+                        listOf(
+                            30 to stringResource(R.string.period_30),
+                            90 to stringResource(R.string.period_90),
+                            365 to stringResource(R.string.period_year),
+                            0 to stringResource(R.string.period_all),
+                        )
+                            .forEach { (days, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        selectedPeriodDays = days
+                                        selectedExerciseId = null
+                                        showPeriodMenu = false
+                                    },
+                                )
+                            }
+                    }
                 }
             }
             if (!hasTrainingData) {
@@ -1105,12 +1238,12 @@ private fun NativeProgressScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                "Your progress starts with one workout",
+                                stringResource(R.string.progress_starts),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                             )
                             Text(
-                                "Complete a workout and GainsLab will turn your sets into useful trends.",
+                                stringResource(R.string.progress_starts_description),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Button(onClick = onTrain) { Text("Train") }
@@ -1122,38 +1255,38 @@ private fun NativeProgressScreen(
                     item {
                         ExerciseProgressCard(
                             exercise = exercise,
-                            sessions = sessions,
+                            sessions = visibleSessions,
                             metric = selectedMetric,
                             onMetricChange = { selectedMetric = it },
                         )
                     }
                 }
                 item {
-                    Text("Overview", style = MaterialTheme.typography.titleLarge)
+                            Text(stringResource(R.string.progress_overview), style = MaterialTheme.typography.titleLarge)
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard("Workouts", stats.totalSessions.toString(), Modifier.weight(1f))
-                        StatCard("Completed", stats.completedSessions.toString(), Modifier.weight(1f))
+                        StatCard(stringResource(R.string.progress_workouts), stats.totalSessions.toString(), Modifier.weight(1f))
+                        StatCard(stringResource(R.string.progress_completed), stats.completedSessions.toString(), Modifier.weight(1f))
                     }
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatCard(
-                            "Sets",
+                            stringResource(R.string.label_sets),
                             stats.completedSets.toString() + "/" + stats.totalSets,
                             Modifier.weight(1f),
                         )
-                        StatCard("Max volume", formatVolume(stats.totalVolume), Modifier.weight(1f))
+                        StatCard(stringResource(R.string.progress_max_volume), formatVolume(stats.totalVolume), Modifier.weight(1f))
                     }
                 }
                 item {
                     Text(
-                        "Overall completion: " + stats.completionPercent + "%",
+                        stringResource(R.string.progress_overall_completion, stats.completionPercent),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                item { Text("Exercises", style = MaterialTheme.typography.titleLarge) }
+                item { Text(stringResource(R.string.progress_exercises), style = MaterialTheme.typography.titleLarge) }
                 items(stats.exerciseStatistics, key = { it.exerciseId }) { exercise ->
                     Card(
                         modifier = Modifier
@@ -1199,10 +1332,10 @@ private fun ExerciseProgressCard(
         .mapNotNull { session -> exerciseMetricValue(session, exercise.exerciseId, metric) }
         .takeLast(12)
     val metricLabel = when (metric) {
-        "1RM" -> "Estimated 1RM"
-        "VOLUME" -> "Volume"
-        "REPS" -> "Repetitions"
-        else -> "Weight"
+        "1RM" -> stringResource(R.string.progress_metric_1rm)
+        "VOLUME" -> stringResource(R.string.progress_metric_volume)
+        "REPS" -> stringResource(R.string.progress_metric_reps)
+        else -> stringResource(R.string.progress_metric_weight)
     }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1217,21 +1350,30 @@ private fun ExerciseProgressCard(
         ) {
             Text(exercise.exerciseName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                listOf("WEIGHT" to "Weight", "1RM" to "1RM", "VOLUME" to "Volume", "REPS" to "Reps").forEach { (key, label) ->
+                listOf(
+                    "WEIGHT" to stringResource(R.string.progress_metric_weight),
+                    "1RM" to stringResource(R.string.progress_metric_1rm),
+                    "VOLUME" to stringResource(R.string.progress_metric_volume),
+                    "REPS" to stringResource(R.string.progress_metric_reps),
+                ).forEach { (key, label) ->
                     PickerChip(label, active = metric == key) { onMetricChange(key) }
                 }
             }
             Text(metricLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (points.isEmpty()) {
-                Text("No completed sets yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.progress_no_sets), color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 ProgressTrendBars(points = points, metric = metric)
                 val current = points.last()
                 Text(
-                    "Current ${formatMetricValue(current, metric)} · Best ${formatMetricValue(points.maxOrNull() ?: current, metric)}",
+                    stringResource(
+                        R.string.progress_current_best,
+                        formatMetricValue(current, metric),
+                        formatMetricValue(points.maxOrNull() ?: current, metric),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -1339,41 +1481,41 @@ private fun NativeMoreScreen(
             item { GainsLabWordmarkNative(modifier = Modifier.padding(top = 16.dp)) }
             item {
                 NativeScreenHeading(
-                    eyebrow = "MORE",
-                    title = "Settings",
-                    subtitle = "Plans, preferences, data and support.",
+                    eyebrow = stringResource(R.string.more_eyebrow),
+                    title = stringResource(R.string.more_title),
+                    subtitle = stringResource(R.string.more_subtitle),
                 )
             }
             item {
                 NativeSettingsGroup(
-                    title = "Training plan",
-                    description = "Choose or edit your routine",
+                    title = stringResource(R.string.more_training_plan),
+                    description = stringResource(R.string.more_training_plan_description),
                 ) {
-                    NativeSettingsRow("Manage plans", "Setup your workout plans", onRoutines)
-                    NativeSettingsRow("Manage exercises", "Manage your exercise list", onExercises)
+                    NativeSettingsRow(stringResource(R.string.more_manage_plans), stringResource(R.string.more_manage_plans_description), onRoutines)
+                    NativeSettingsRow(stringResource(R.string.more_manage_exercises), stringResource(R.string.more_manage_exercises_description), onExercises)
                 }
             }
             item {
                 NativeSettingsGroup(
-                    title = "Account and data",
-                    description = "Sync, imports and backups",
+                    title = stringResource(R.string.more_account_data),
+                    description = stringResource(R.string.more_account_data_description),
                 ) {
                     NativeSettingsRow(
-                        "Account and sync",
+                        stringResource(R.string.more_account_sync),
                         if (settings.cloudEmail == null) {
-                            "Keep your private routines in sync"
+                            stringResource(R.string.more_account_sync_description)
                         } else {
-                            "Connected as " + settings.cloudEmail
+                            stringResource(R.string.more_connected_as, settings.cloudEmail)
                         },
                     )
                     NativeSettingsRow(
-                        "Import data",
-                        "Bring over sessions, routines and supersets",
+                        stringResource(R.string.more_import_data),
+                        stringResource(R.string.more_import_data_description),
                         onImport,
                     )
                     NativeSettingsRow(
-                        "Export, backup, and restore",
-                        "Create and export backups for transferring between devices",
+                        stringResource(R.string.more_export_data),
+                        stringResource(R.string.more_export_data_description),
                         onExport,
                     )
                     Row(
@@ -1383,12 +1525,12 @@ private fun NativeMoreScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         OutlinedAction(
-                            if (isExporting) "Exporting..." else "Export",
+                            if (isExporting) stringResource(R.string.more_exporting) else stringResource(R.string.more_export),
                             onExport,
                             Modifier.weight(1f),
                         )
                         OutlinedAction(
-                            if (isImporting) "Importing..." else "Import",
+                            if (isImporting) stringResource(R.string.more_importing) else stringResource(R.string.more_import),
                             onImport,
                             Modifier.weight(1f),
                         )
@@ -1397,7 +1539,7 @@ private fun NativeMoreScreen(
                         TextField(
                             value = cloudEmail,
                             onValueChange = { cloudEmail = it },
-                            label = { Text("Email") },
+                            label = { Text(stringResource(R.string.settings_email)) },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1406,7 +1548,7 @@ private fun NativeMoreScreen(
                         TextField(
                             value = cloudPassword,
                             onValueChange = { cloudPassword = it },
-                            label = { Text("Password") },
+                            label = { Text(stringResource(R.string.settings_password)) },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1419,11 +1561,11 @@ private fun NativeMoreScreen(
                             Button(
                                 onClick = { onSignInCloud(cloudEmail, cloudPassword, false) },
                                 enabled = !settings.cloudBusy && cloudEmail.isNotBlank() && cloudPassword.isNotBlank(),
-                            ) { Text("Sign in") }
+                            ) { Text(stringResource(R.string.settings_sign_in)) }
                             TextButton(
                                 onClick = { onSignInCloud(cloudEmail, cloudPassword, true) },
                                 enabled = !settings.cloudBusy && cloudEmail.isNotBlank() && cloudPassword.isNotBlank(),
-                            ) { Text("Create account") }
+                            ) { Text(stringResource(R.string.settings_create_account)) }
                         }
                     } else if (settings.cloudEmail != null) {
                         Row(
@@ -1431,19 +1573,19 @@ private fun NativeMoreScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Button(onClick = onUploadCloud, enabled = !settings.cloudBusy) {
-                                Text("Upload")
+                                Text(stringResource(R.string.settings_upload))
                             }
                             Button(onClick = onRestoreCloud, enabled = !settings.cloudBusy) {
-                                Text("Restore")
+                                Text(stringResource(R.string.settings_restore))
                             }
                             TextButton(onClick = onSignOutCloud, enabled = !settings.cloudBusy) {
-                                Text("Sign out")
+                                Text(stringResource(R.string.settings_sign_out))
                             }
                         }
                     }
                     if (!settings.cloudConfigured) {
                         Text(
-                            "Cloud sync is not configured in this build.",
+                            stringResource(R.string.more_cloud_unconfigured),
                             modifier = Modifier.padding(16.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1459,16 +1601,16 @@ private fun NativeMoreScreen(
             }
             item {
                 NativeSettingsGroup(
-                    title = "App configuration",
-                    description = "Theme, language and app behavior",
+                    title = stringResource(R.string.more_app_configuration),
+                    description = stringResource(R.string.more_app_configuration_description),
                 ) {
-                    NativeSettingsRow("Appearance and experience", "Adjust theme and other app behavior")
-                    NativeSettingsRow("Language and units", "Set the app language and default weight units")
-                    NativeSettingsRow("Notifications", "Adjust notification settings for rest timers")
+                    NativeSettingsRow(stringResource(R.string.more_appearance), stringResource(R.string.more_appearance_description))
+                    NativeSettingsRow(stringResource(R.string.more_language), stringResource(R.string.more_language_description))
+                    NativeSettingsRow(stringResource(R.string.more_notifications), stringResource(R.string.more_notifications_description))
                     TextField(
                         value = restSeconds,
                         onValueChange = { restSeconds = it.filter(Char::isDigit) },
-                        label = { Text("Default rest (seconds)") },
+                        label = { Text(stringResource(R.string.settings_default_rest)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier
@@ -1481,18 +1623,18 @@ private fun NativeMoreScreen(
                         },
                         enabled = restSeconds.toIntOrNull()?.let { it in 1..3600 } == true,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    ) { Text("Save settings") }
+                    ) { Text(stringResource(R.string.settings_save)) }
                 }
             }
             item {
                 NativeSettingsGroup(
-                    title = "Support",
-                    description = "Community, diagnostics and app information",
+                    title = stringResource(R.string.more_support),
+                    description = stringResource(R.string.more_support_description),
                 ) {
-                    NativeSettingsRow("Feature request", "Suggest a new feature")
-                    NativeSettingsRow("Bug report", "Let us know when you encounter a bug")
-                    NativeSettingsRow("Copy logs", "Copy your logs for a bug report")
-                    NativeSettingsRow("App info", "Display app information")
+                    NativeSettingsRow(stringResource(R.string.more_feature_request), stringResource(R.string.more_feature_request_description))
+                    NativeSettingsRow(stringResource(R.string.more_bug_report), stringResource(R.string.more_bug_report_description))
+                    NativeSettingsRow(stringResource(R.string.more_copy_logs), stringResource(R.string.more_copy_logs_description))
+                    NativeSettingsRow(stringResource(R.string.more_app_info), stringResource(R.string.more_app_info_description))
                 }
             }
             item { Spacer(Modifier.height(32.dp)) }
@@ -1522,6 +1664,54 @@ private fun NativeSettingsGroup(
 
 @Composable
 private fun NativeSettingsRow(
+    title: String,
+    subtitle: String,
+    onClick: (() -> Unit)? = null,
+) {
+    val icon = when {
+        title.contains("plans", ignoreCase = true) || title.contains("planes", ignoreCase = true) -> Icons.Filled.List
+        title.contains("exercises", ignoreCase = true) || title.contains("ejercicios", ignoreCase = true) -> Icons.Filled.FitnessCenter
+        title.contains("sync", ignoreCase = true) || title.contains("sincron", ignoreCase = true) -> Icons.Filled.Sync
+        title.contains("import", ignoreCase = true) -> Icons.Filled.FileUpload
+        title.contains("export", ignoreCase = true) -> Icons.Filled.FileDownload
+        title.contains("appearance", ignoreCase = true) || title.contains("apariencia", ignoreCase = true) -> Icons.Filled.Settings
+        title.contains("language", ignoreCase = true) || title.contains("idioma", ignoreCase = true) -> Icons.Filled.Language
+        title.contains("notifications", ignoreCase = true) || title.contains("notific", ignoreCase = true) -> Icons.Filled.Notifications
+        title.contains("feature", ignoreCase = true) || title.contains("funcion", ignoreCase = true) || title.contains("función", ignoreCase = true) -> Icons.Filled.Feedback
+        title.contains("bug", ignoreCase = true) || title.contains("error", ignoreCase = true) -> Icons.Filled.BugReport
+        title.contains("copy", ignoreCase = true) || title.contains("copiar", ignoreCase = true) -> Icons.Filled.ContentCopy
+        title.contains("info", ignoreCase = true) || title.contains("inform", ignoreCase = true) -> Icons.Filled.Info
+        else -> Icons.Filled.MoreHoriz
+    }
+    val rowModifier = if (onClick == null) Modifier.fillMaxWidth() else Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+    Row(
+        modifier = rowModifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(11.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LegacyNativeSettingsRow(
     title: String,
     subtitle: String,
     onClick: (() -> Unit)? = null,
@@ -2665,6 +2855,7 @@ private fun ActiveWorkoutScreen(
     var showMoreActions by rememberSaveable { mutableStateOf(false) }
     var showSaveTemplate by rememberSaveable { mutableStateOf(false) }
     var showFinishDialog by rememberSaveable { mutableStateOf(false) }
+    var showCompletionSummary by rememberSaveable(session.id) { mutableStateOf(false) }
     var showRenameDialog by rememberSaveable { mutableStateOf(false) }
     var pairingExerciseId by rememberSaveable { mutableStateOf<String?>(null) }
     var notesExerciseId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -2684,6 +2875,28 @@ private fun ActiveWorkoutScreen(
             nowEpochMillis = System.currentTimeMillis()
             delay(1_000)
         }
+    }
+
+    if (showCompletionSummary) {
+        if (showSaveTemplate) {
+            SaveTemplateDialog(
+                sessionName = session.name,
+                folders = templateFolders,
+                onDismiss = { showSaveTemplate = false },
+                onSave = { name, folderId ->
+                    onSaveRoutine(name, folderId)
+                    showSaveTemplate = false
+                },
+            )
+        }
+        WorkoutCompleteScreen(
+            session = session,
+            stats = finishStats,
+            previousStats = previousStats,
+            onSaveTemplate = { showSaveTemplate = true },
+            onDone = onBack,
+        )
+        return
     }
 
     if (editingExercise != null && editingSet != null) {
@@ -2741,7 +2954,10 @@ private fun ActiveWorkoutScreen(
                         label = { Text("Search exercises") },
                         singleLine = true,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Box {
                             TextButton(onClick = { pickerFilterExpanded = true }) {
                                 Text("Filter: $muscleFilter")
@@ -2826,12 +3042,12 @@ private fun ActiveWorkoutScreen(
     if (showRenameDialog) {
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
-            title = { Text("Rename workout") },
+            title = { Text(stringResource(R.string.active_rename_title)) },
             text = {
                 TextField(
                     value = renameDraft,
                     onValueChange = { renameDraft = it },
-                    label = { Text("Workout name") },
+                    label = { Text(stringResource(R.string.active_workout_name)) },
                     singleLine = true,
                 )
             },
@@ -2842,9 +3058,9 @@ private fun ActiveWorkoutScreen(
                         showRenameDialog = false
                     },
                     enabled = renameDraft.isNotBlank(),
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.common_save)) }
             },
-            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showRenameDialog = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 
@@ -2887,36 +3103,46 @@ private fun ActiveWorkoutScreen(
     if (showFinishDialog) {
         AlertDialog(
             onDismissRequest = { showFinishDialog = false },
-            title = { Text("Finish workout?") },
+            title = { Text(stringResource(R.string.finish_workout_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Your session will be saved in History. You can also turn it into a reusable template now.")
+                    Text(stringResource(R.string.finish_saved_history))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        FinishMetric("SETS", "${finishStats.completedSets}")
-                        FinishMetric("VOLUME", formatVolume(finishStats.totalVolume))
-                        FinishMetric("DURATION", formatElapsedWorkout(nowEpochMillis - session.startedAtEpochMillis))
+                        FinishMetric(stringResource(R.string.label_sets), "${finishStats.completedSets}")
+                        FinishMetric(stringResource(R.string.label_volume), formatVolume(finishStats.totalVolume))
+                        FinishMetric(stringResource(R.string.label_duration), formatElapsedWorkout(nowEpochMillis - session.startedAtEpochMillis))
                     }
                     previousStats?.let { previous ->
                         if (previous.totalVolume > 0.0) {
                             val delta = ((finishStats.totalVolume - previous.totalVolume) / previous.totalVolume * 100.0).toInt()
                             Text(
-                                "Compared with last workout: ${if (delta >= 0) "+$delta" else delta}% volume",
+                                stringResource(
+                                    R.string.finish_compared_volume,
+                                    if (delta >= 0) "+$delta" else delta.toString(),
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (delta >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     Text(
-                        "${finishStats.completedSets}/${finishStats.totalSets} sets Â· " +
-                            "${session.exercises.size} exercises",
+                        stringResource(
+                            R.string.finish_sets_summary,
+                            finishStats.completedSets,
+                            finishStats.totalSets,
+                            session.exercises.size,
+                        ),
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        "Duration ${formatElapsedWorkout(nowEpochMillis - session.startedAtEpochMillis)} Â· " +
-                            "Volume ${"%.0f".format(Locale.getDefault(), finishStats.totalVolume)}",
+                        stringResource(
+                            R.string.finish_duration_volume,
+                            formatElapsedWorkout(nowEpochMillis - session.startedAtEpochMillis),
+                            "%.0f".format(Locale.getDefault(), finishStats.totalVolume),
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2928,18 +3154,20 @@ private fun ActiveWorkoutScreen(
                         onClick = {
                             onComplete()
                             showFinishDialog = false
+                            showCompletionSummary = true
                         },
-                    ) { Text("Finish") }
+                    ) { Text(stringResource(R.string.finish_complete)) }
                     Button(
                         onClick = {
                             onComplete()
                             showFinishDialog = false
                             showSaveTemplate = true
+                            showCompletionSummary = true
                         },
-                    ) { Text("Finish & save") }
+                    ) { Text(stringResource(R.string.finish_complete_save)) }
                 }
             },
-            dismissButton = { TextButton(onClick = { showFinishDialog = false }) { Text("Keep training") } },
+            dismissButton = { TextButton(onClick = { showFinishDialog = false }) { Text(stringResource(R.string.finish_keep_training)) } },
         )
     }
 
@@ -3000,7 +3228,7 @@ private fun ActiveWorkoutScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     PolishedActionButton(
-                        label = "+ Add exercise",
+                        label = stringResource(R.string.active_add_exercise),
                         onClick = { showExercisePicker = true },
                         modifier = Modifier.fillMaxWidth(),
                         primary = true,
@@ -3010,7 +3238,7 @@ private fun ActiveWorkoutScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         PolishedActionButton(
-                            label = "Save template",
+                            label = stringResource(R.string.active_save_template),
                             onClick = { showSaveTemplate = true },
                             modifier = Modifier.weight(1f),
                             primary = false,
@@ -3018,7 +3246,7 @@ private fun ActiveWorkoutScreen(
                         TextButton(
                             onClick = onHealthConnect,
                             modifier = Modifier.weight(1f),
-                        ) { Text("Health Connect") }
+                        ) { Text(stringResource(R.string.active_health_connect)) }
                     }
                 }
             }
@@ -3095,11 +3323,180 @@ private fun ActiveWorkoutScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Your data is saved locally and stays available when you train offline.",
+                    text = stringResource(R.string.active_offline_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 24.dp),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutCompleteScreen(
+    session: WorkoutSession,
+    stats: com.liftlog.shared.stats.WorkoutStatistics,
+    previousStats: com.liftlog.shared.stats.WorkoutStatistics?,
+    onSaveTemplate: () -> Unit,
+    onDone: () -> Unit,
+) {
+    val completedAt = session.completedAtEpochMillis ?: session.startedAtEpochMillis
+    val duration = formatElapsedWorkout((completedAt - session.startedAtEpochMillis).coerceAtLeast(0))
+    val highlights = stats.exerciseStatistics.mapNotNull { current ->
+        val previous = previousStats?.exerciseStatistics?.firstOrNull {
+            it.exerciseId == current.exerciseId || it.exerciseName == current.exerciseName
+        }
+        val previousVolume = previous?.totalVolume ?: 0.0
+        if (current.totalVolume > 0.0 && previousVolume > 0.0 && current.totalVolume > previousVolume) {
+            current to (((current.totalVolume - previousVolume) / previousVolume) * 100.0).toInt()
+        } else {
+            null
+        }
+    }.sortedByDescending { it.second }.take(3)
+    val volumeDelta = previousStats?.totalVolume?.takeIf { it > 0.0 }?.let { previous ->
+        (((stats.totalVolume - previous) / previous) * 100.0).toInt()
+    }
+
+    Scaffold(containerColor = MaterialTheme.colorScheme.background) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(top = 28.dp, bottom = 32.dp),
+        ) {
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "\u2713",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.complete_eyebrow),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(session.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                    shape = RoundedCornerShape(22.dp),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        FinishMetric(stringResource(R.string.label_duration), duration)
+                        FinishMetric(stringResource(R.string.label_volume), formatVolume(stats.totalVolume))
+                        FinishMetric(stringResource(R.string.label_sets), stats.completedSets.toString())
+                    }
+                }
+            }
+            if (highlights.isNotEmpty()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.complete_improvements), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        highlights.forEach { (exercise, delta) ->
+                            val previousExercise = previousStats?.exerciseStatistics?.firstOrNull {
+                                it.exerciseId == exercise.exerciseId || it.exerciseName == exercise.exerciseName
+                            }
+                            val currentBest = exercise.bestWeight
+                            val previousBest = previousExercise?.bestWeight
+                            val isPersonalRecord = currentBest != null &&
+                                (previousBest == null || currentBest > previousBest)
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = androidx.compose.material3.CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                ),
+                                shape = RoundedCornerShape(18.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        if (isPersonalRecord) {
+                                            Text(
+                                                stringResource(R.string.complete_new_pr),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                        Text(exercise.exerciseName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                        Text(stringResource(R.string.complete_volume_value, formatVolume(exercise.totalVolume)), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text("\u2191 +$delta%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(R.string.complete_compared, session.name.uppercase(Locale.getDefault())), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (volumeDelta != null) {
+                            Text(
+                                if (volumeDelta >= 0) {
+                                    stringResource(R.string.complete_volume_up, kotlin.math.abs(volumeDelta))
+                                } else {
+                                    stringResource(R.string.complete_volume_down, kotlin.math.abs(volumeDelta))
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (volumeDelta >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        } else {
+                            Text(stringResource(R.string.complete_first_session), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onSaveTemplate, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.complete_save_template))
+                    }
+                    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.complete_done))
+                    }
+                }
             }
         }
     }
@@ -3148,13 +3545,13 @@ private fun SafeWorkoutHeader(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "$elapsed  \u00B7  in progress",
+                "$elapsed  \u00B7  ${stringResource(R.string.active_in_progress)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
-            "Rename",
+            stringResource(R.string.active_rename),
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
                 .clickable(onClick = onRename)
@@ -3164,7 +3561,7 @@ private fun SafeWorkoutHeader(
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            "Finish",
+            stringResource(R.string.active_finish),
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
                 .clickable(onClick = onFinish)
@@ -3177,7 +3574,7 @@ private fun SafeWorkoutHeader(
 }
 
 @Composable
-private fun SafePolishedRestTimerCard(
+private fun BrokenSafePolishedRestTimerCard(
     restTimer: RestTimerUiState,
     exerciseName: String,
     onStop: () -> Unit,
@@ -3245,6 +3642,90 @@ private fun SafePolishedRestTimerCard(
                     TextButton(onClick = onRestart) { Text("Restart") }
                     TextButton(onClick = { onAdjust(15) }) { Text("+15s") }
                     TextButton(onClick = onStop) { Text("Skip") }
+                }
+                recommendation?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SafePolishedRestTimerCard(
+    restTimer: RestTimerUiState,
+    exerciseName: String,
+    onStop: () -> Unit,
+    onAdjust: (Int) -> Unit,
+    onRestart: () -> Unit,
+    restConfig: RestConfig?,
+) {
+    var expanded by rememberSaveable(restTimer.sourceExerciseId) { mutableStateOf(false) }
+    val recommendation = restConfig?.let { config ->
+        val min = config.minRestSeconds?.let(::formatRestDuration)
+        val max = config.maxRestSeconds?.let(::formatRestDuration)
+        when {
+            min != null && max != null -> stringResource(R.string.active_recommended_range, min, max)
+            min != null -> stringResource(R.string.active_recommended_min, min)
+            max != null -> stringResource(R.string.active_recommended_max, max)
+            else -> null
+        }
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        "${stringResource(R.string.active_rest)}  \u00B7  $exerciseName",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "%02d:%02d".format(restTimer.remainingSeconds / 60, restTimer.remainingSeconds % 60),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Text(
+                    if (expanded) stringResource(R.string.active_hide) else stringResource(R.string.active_controls),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            if (expanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    TextButton(onClick = { onAdjust(-15) }) { Text("-15s") }
+                    TextButton(onClick = onRestart) { Text(stringResource(R.string.active_restart)) }
+                    TextButton(onClick = { onAdjust(15) }) { Text("+15s") }
+                    TextButton(onClick = onStop) { Text(stringResource(R.string.active_skip)) }
                 }
                 recommendation?.let {
                     Text(
@@ -3349,15 +3830,15 @@ private fun SafePolishedExerciseCard(
                 if (canMoveDown) TextButton(onClick = onMoveDown) { Text("\u2193") }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     DropdownMenuItem(
-                        text = { Text(if (supersetBadge == null) "Pair exercise" else "Edit pairing") },
+                        text = { Text(stringResource(if (supersetBadge == null) R.string.active_pair_exercise else R.string.active_edit_pairing)) },
                         onClick = { showMenu = false; onPair() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Edit notes") },
+                        text = { Text(stringResource(R.string.active_edit_notes)) },
                         onClick = { showMenu = false; onEditNotes() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Remove exercise") },
+                        text = { Text(stringResource(R.string.active_remove_exercise)) },
                         onClick = { showMenu = false; onRemove() },
                     )
                 }
@@ -3377,7 +3858,7 @@ private fun SafePolishedExerciseCard(
                 )
             }
             Text(
-                "+ Add set",
+                stringResource(R.string.active_add_set),
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
                     .clickable(onClick = onAddSet)
@@ -3447,7 +3928,7 @@ private fun SafePolishedSetRow(
         }
         Column(modifier = Modifier.width(76.dp).clickable(onClick = onClick), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(safeSetSummary(previous, exerciseType), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Previous", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            Text(stringResource(R.string.active_previous), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
         }
         when (exerciseType) {
             ExerciseType.WEIGHT_REPS -> {
@@ -3648,7 +4129,7 @@ private fun PolishedExercisePickerDialog(
 }
 
 @Composable
-private fun PolishedSearchField(value: String, onValueChange: (String) -> Unit) {
+private fun BrokenPolishedSearchField(value: String, onValueChange: (String) -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
@@ -3662,6 +4143,41 @@ private fun PolishedSearchField(value: String, onValueChange: (String) -> Unit) 
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
         Text("âŒ•", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleLarge)
+        Box(modifier = Modifier.weight(1f)) {
+            if (value.isBlank()) {
+                Text("Search exercises", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = ComposeTextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PolishedSearchField(value: String, onValueChange: (String) -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .padding(horizontal = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Search,
+            contentDescription = "Search exercises",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Box(modifier = Modifier.weight(1f)) {
             if (value.isBlank()) {
                 Text("Search exercises", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3802,7 +4318,7 @@ private fun PolishedProgressCard(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(
-            "WORKOUT IN PROGRESS",
+            stringResource(R.string.active_workout_in_progress),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
@@ -3825,7 +4341,7 @@ private fun PolishedProgressCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        if (plannedSets == 0) "Ready when you are" else "$completedSets/$plannedSets sets",
+                        if (plannedSets == 0) stringResource(R.string.active_ready) else stringResource(R.string.active_sets_progress, completedSets, plannedSets),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
