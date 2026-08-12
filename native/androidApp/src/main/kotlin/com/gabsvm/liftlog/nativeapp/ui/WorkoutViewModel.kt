@@ -57,6 +57,7 @@ data class RestTimerUiState(
     val endEpochMillis: Long? = null,
     val remainingSeconds: Long = 0,
     val sourceExerciseId: String? = null,
+    val durationSeconds: Long = 0,
 ) {
     val isRunning: Boolean get() = remainingSeconds > 0 && endEpochMillis != null
 }
@@ -117,13 +118,38 @@ class WorkoutViewModel(
         preferences.edit()
             .putLong(REST_TIMER_END_KEY, end)
             .putString(REST_TIMER_SOURCE_EXERCISE_KEY, sourceExerciseId)
+            .putLong(REST_TIMER_DURATION_KEY, duration.toLong())
             .apply()
-        _restTimer.value = RestTimerUiState(end, duration.toLong(), sourceExerciseId)
+        _restTimer.value = RestTimerUiState(end, duration.toLong(), sourceExerciseId, duration.toLong())
         val intent = Intent(appContext, RestTimerService::class.java).apply {
             action = RestTimerService.ACTION_START
             putExtra(RestTimerService.EXTRA_END_EPOCH_MILLIS, end)
         }
         appContext.startForegroundService(intent)
+    }
+
+    /** Adjusts the active countdown without losing the exercise that started it. */
+    fun adjustRestTimer(deltaSeconds: Int) {
+        val current = readRestTimer()
+        if (!current.isRunning) return
+        val remaining = (current.remainingSeconds + deltaSeconds).coerceAtLeast(1L)
+        val end = System.currentTimeMillis() + remaining * 1_000L
+        preferences.edit().putLong(REST_TIMER_END_KEY, end).apply()
+        _restTimer.value = current.copy(endEpochMillis = end, remainingSeconds = remaining)
+        appContext.startForegroundService(
+            Intent(appContext, RestTimerService::class.java).apply {
+                action = RestTimerService.ACTION_START
+                putExtra(RestTimerService.EXTRA_END_EPOCH_MILLIS, end)
+            },
+        )
+    }
+
+    /** Restarts the current interval using the original duration for this exercise. */
+    fun restartRestTimer() {
+        val current = readRestTimer()
+        val duration = current.durationSeconds.takeIf { it > 0L }?.toInt()
+            ?: _settings.value.defaultRestSeconds
+        startRestTimer(duration, current.sourceExerciseId)
     }
 
     fun saveDefaultRestSeconds(seconds: Int) {
@@ -218,6 +244,7 @@ class WorkoutViewModel(
         preferences.edit()
             .remove(REST_TIMER_END_KEY)
             .remove(REST_TIMER_SOURCE_EXERCISE_KEY)
+            .remove(REST_TIMER_DURATION_KEY)
             .apply()
         _restTimer.value = RestTimerUiState()
         appContext.stopService(Intent(appContext, RestTimerService::class.java))
@@ -379,6 +406,28 @@ class WorkoutViewModel(
             selectedSessionId = null,
             error = null,
         )
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    saveMutex.withLock { repository.delete(sessionId) }
+                    readRepositoryData()
+                }
+            }.onSuccess { data ->
+                _uiState.value = _uiState.value.copy(
+                    sessions = data.first,
+                    routines = data.second.first,
+                    templateFolders = data.second.second.first,
+                    exercises = data.second.second.second,
+                    infoMessage = "Workout deleted",
+                    error = null,
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(error = error.message ?: "Could not delete workout")
+            }
+        }
     }
 
     fun completeSession() {
@@ -888,8 +937,9 @@ class WorkoutViewModel(
         val end = preferences.getLong(REST_TIMER_END_KEY, 0L).takeIf { it > 0L }
         val remaining = end?.let { ((it - System.currentTimeMillis() + 999L) / 1000L).coerceAtLeast(0L) } ?: 0L
         val sourceExerciseId = preferences.getString(REST_TIMER_SOURCE_EXERCISE_KEY, null)
+        val durationSeconds = preferences.getLong(REST_TIMER_DURATION_KEY, 0L)
         return if (remaining > 0L) {
-            RestTimerUiState(end, remaining, sourceExerciseId)
+            RestTimerUiState(end, remaining, sourceExerciseId, durationSeconds)
         } else {
             RestTimerUiState()
         }
@@ -1015,6 +1065,7 @@ class WorkoutViewModel(
         const val LEGACY_IMPORT_TAG = "LiftLogLegacyImport"
         const val REST_TIMER_END_KEY = "end_epoch_millis"
         const val REST_TIMER_SOURCE_EXERCISE_KEY = "source_exercise_id"
+        const val REST_TIMER_DURATION_KEY = "duration_seconds"
         const val DEFAULT_REST_SECONDS_KEY = "default_rest_seconds"
     }
 }

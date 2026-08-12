@@ -63,6 +63,12 @@ class SQLiteWorkoutSessionRepository(
         database.withTransaction { writeSession(database.writableDatabase, session) }
     }
 
+    override suspend fun delete(id: String) {
+        database.withTransaction {
+            database.writableDatabase.delete("workout_sessions", "id = ?", arrayOf(id))
+        }
+    }
+
     override suspend fun saveAll(sessions: List<WorkoutSession>) {
         if (sessions.isEmpty()) return
         database.withTransaction {

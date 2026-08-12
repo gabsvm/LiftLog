@@ -21,6 +21,7 @@ interface WorkoutSessionRepository {
     suspend fun list(limit: Int = 50): List<WorkoutSession>
     suspend fun listAll(): List<WorkoutSession> = list(Int.MAX_VALUE)
     suspend fun save(session: WorkoutSession)
+    suspend fun delete(id: String) = Unit
 
     /** Implementations may override this to make a multi-session import atomic. */
     suspend fun saveAll(sessions: List<WorkoutSession>) {

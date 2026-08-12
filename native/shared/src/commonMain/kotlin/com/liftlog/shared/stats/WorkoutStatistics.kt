@@ -17,6 +17,7 @@ data class ExerciseStatistics(
     val exerciseName: String,
     val sessions: Int,
     val completedSets: Int,
+    val totalReps: Int,
     val totalVolume: Double,
     val bestWeight: Double?,
     val bestEstimatedOneRepMax: Double?,
@@ -59,6 +60,7 @@ object WorkoutStatisticsCalculator {
                     exerciseName = exercise.name,
                     sessions = rows.map { (session, _) -> session.id }.distinct().size,
                     completedSets = completed,
+                    totalReps = sets.sumOf { it.reps ?: 0 },
                     totalVolume = sets.sumOf { set -> volume(exercise.type, set) },
                     bestWeight = sets.mapNotNull(LoggedSet::weight).maxOrNull(),
                     bestEstimatedOneRepMax = sets
