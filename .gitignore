@@ -17,6 +17,12 @@ site/build
 
 service-account.json
 
+# Local mobile backend configuration. The anon key is public by design but
+# project URLs are environment-specific and never committed with user data.
+app/.env
+app/.env.*
+!app/.env.example
+
 # Mono auto generated files
 mono_crash.*
 

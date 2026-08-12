@@ -5,7 +5,6 @@ import { AddEffectFn, RootState } from '@/store/store';
 import {
   fetchUpcomingSessions,
   initializeProgramStateSlice,
-  savePlan,
   selectActiveProgram,
   setActivePlan,
   setIsHydrated,
@@ -23,7 +22,7 @@ import { toRecord } from '@/utils/reduce';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { TaskAbortError } from '@reduxjs/toolkit';
 
-const builtInProgramsStorageKey = 'hasSavedDefaultPlans2';
+const builtInProgramsStorageKey = 'hasSavedDefaultPlans3';
 export function applyProgramEffects(addEffect: AddEffectFn) {
   addEffect(
     initializeProgramStateSlice,
@@ -42,7 +41,7 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
 
       let activePlanId: string | undefined;
       const dbPrograms = await db.select().from(programsSchema);
-      const programs = (
+      const storedPrograms = (
         dbPrograms.length ? dbPrograms : [getEmptyInitialProgram()]
       ).reduce(
         toRecord(
@@ -56,15 +55,22 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
         ),
         {},
       );
+
+      const shouldSeedBuiltInPrograms = !(await keyValueStore.getItem(
+        builtInProgramsStorageKey,
+      ));
+      const programs = { ...storedPrograms };
+      if (shouldSeedBuiltInPrograms) {
+        for (const [id, program] of Object.entries(BuiltInPrograms)) {
+          programs[id] ??= program;
+        }
+      }
+
+      // Loading all programs in one reducer pass avoids notifying every store
+      // listener once per built-in plan on a fresh install.
       dispatch(setSavedPlans(programs));
 
-      if (!(await keyValueStore.getItem(builtInProgramsStorageKey))) {
-        for (const [id, program] of Object.entries(BuiltInPrograms)) {
-          if (id in getState().program.savedPrograms) {
-            continue;
-          }
-          dispatch(savePlan({ programId: id, programBlueprint: program }));
-        }
+      if (shouldSeedBuiltInPrograms) {
         await persistPrograms(getState(), db, logger, throwIfCancelled);
         await keyValueStore.setItem(builtInProgramsStorageKey, 'true');
       }

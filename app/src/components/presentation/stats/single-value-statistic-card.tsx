@@ -15,7 +15,10 @@ export default function SingleValueStatisticCard(props: {
     <Card mode="contained" style={{ flex: 1 }}>
       <Card.Content
         style={{
-          gap: spacing[1],
+          gap: spacing[3],
+          minHeight: 116,
+          justifyContent: 'space-between',
+          padding: spacing[4],
         }}
       >
         <View
@@ -25,12 +28,29 @@ export default function SingleValueStatisticCard(props: {
             gap: spacing[2],
           }}
         >
-          <Icon size={16} source={props.icon} color={colors.primary} />
-          <Text variant="labelLarge" lineBreakMode="tail" numberOfLines={1}>
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.primaryContainer,
+            }}
+          >
+            <Icon size={17} source={props.icon} color={colors.primary} />
+          </View>
+          <Text
+            variant="labelMedium"
+            style={{ color: colors.onSurfaceVariant, flex: 1 }}
+            numberOfLines={2}
+          >
             {props.title}
           </Text>
         </View>
-        <Text>{props.value}</Text>
+        <Text variant="titleLarge" style={{ fontWeight: '800' }}>
+          {props.value}
+        </Text>
       </Card.Content>
     </Card>
   );

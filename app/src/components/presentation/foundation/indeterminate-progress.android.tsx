@@ -1,8 +1,7 @@
-import { Host, LoadingIndicator } from '@expo/ui/jetpack-compose';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { ActivityIndicator } from 'react-native';
+
 export function IndeterminateProgress() {
-  return (
-    <Host matchContents>
-      <LoadingIndicator />
-    </Host>
-  );
+  const { colors } = useAppTheme();
+  return <ActivityIndicator size="small" color={colors.primary} />;
 }

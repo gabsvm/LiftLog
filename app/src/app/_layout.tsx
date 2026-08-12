@@ -10,13 +10,23 @@ import ServicesProvider from '@/components/smart/services-provider';
 import { PreventNavigateProvider } from '@/hooks/usePreventNavigate';
 import { install } from 'react-native-quick-crypto';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { useAppSelector } from '@/store';
-import { selectFollowRequestCount } from '@/store/feed';
 import { useTranslate } from '@tolgee/react';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 
-install();
+void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
+  console.warn('Could not keep the native splash screen visible.', error);
+});
+
+// QuickCrypto powers encrypted inbox features, but it must not prevent the
+// application shell from starting when a native initialization fails.
+try {
+  install();
+} catch (error) {
+  console.warn('QuickCrypto could not be initialized.', error);
+}
 
 LogBox.ignoreLogs([
   /.*is not a valid icon name.*/,
@@ -33,6 +43,15 @@ if (Platform.OS !== 'web') {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    // If native service creation fails before AppStateProvider mounts, never
+    // leave the user trapped behind the operating-system splash indefinitely.
+    const fallback = setTimeout(() => {
+      void SplashScreen.hideAsync();
+    }, 3_500);
+    return () => clearTimeout(fallback);
+  }, []);
+
   return (
     <GestureHandlerRootView>
       <PreventNavigateProvider>
@@ -58,27 +77,24 @@ export default function RootLayout() {
 function Layout() {
   const { t } = useTranslate();
   const { colors } = useAppTheme();
-  const followRequestCount = useAppSelector(selectFollowRequestCount);
-  const showFeed = useAppSelector((x) => x.settings.showFeed);
   return (
     <NativeTabs
-      indicatorColor={colors.secondaryContainer}
+      indicatorColor={colors.primaryContainer}
       rippleColor={colors.primary}
-      backgroundColor={colors.surfaceContainer}
+      backgroundColor={colors.surfaceContainerLow}
       labelVisibilityMode="labeled"
       iconColor={colors.onSurfaceVariant}
     >
       <NativeTabs.Trigger name="(session)">
         <NativeTabs.Trigger.Label>
-          {t('workout.workout.label')}
+          {t('navigation.training')}
         </NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'dumbbell', selected: 'dumbbell.fill' }}
           md={{ default: 'fitness_center', selected: 'fitness_center' }}
         />
       </NativeTabs.Trigger>
-      (
-      <NativeTabs.Trigger name="feed" hidden={!showFeed}>
+      <NativeTabs.Trigger name="feed" hidden>
         <NativeTabs.Trigger.Icon
           sf={{
             default: 'bubble.left.and.bubble.right',
@@ -89,20 +105,14 @@ function Layout() {
         <NativeTabs.Trigger.Label>
           {t('feed.feed.title')}
         </NativeTabs.Trigger.Label>
-        {followRequestCount && (
-          <NativeTabs.Trigger.Badge>
-            {followRequestCount.toString()}
-          </NativeTabs.Trigger.Badge>
-        )}
       </NativeTabs.Trigger>
-      )
       <NativeTabs.Trigger name="stats">
         <NativeTabs.Trigger.Icon
           sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }}
           md={{ default: 'bar_chart', selected: 'bar_chart' }}
         />
         <NativeTabs.Trigger.Label>
-          {t('stats.stats.title')}
+          {t('navigation.progress')}
         </NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="history">
@@ -116,11 +126,11 @@ function Layout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <NativeTabs.Trigger.Icon
-          sf="gear"
-          md={{ default: 'settings', selected: 'settings' }}
+          sf={{ default: 'ellipsis.circle', selected: 'ellipsis.circle.fill' }}
+          md={{ default: 'more_horiz', selected: 'more_horiz' }}
         />
         <NativeTabs.Trigger.Label>
-          {t('settings.settings.title')}
+          {t('navigation.more')}
         </NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>

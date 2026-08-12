@@ -20,10 +20,20 @@ import {
 } from '@material/material-color-utilities';
 
 export const rounding = {
-  roundedRectangleRadius: 10,
-  roundedRectangleFocusRingRadius: 15,
-  segmentedBetweenRadius: 2,
+  roundedRectangleRadius: 18,
+  roundedRectangleFocusRingRadius: 22,
+  segmentedBetweenRadius: 6,
 };
+
+export const gainsLab = {
+  acid: '#C6FF00',
+  acidPressed: '#AEE600',
+  ink: '#0B0D0C',
+  inkSoft: '#151816',
+  success: '#45D483',
+  warning: '#FFCC66',
+  danger: '#FF6B6B',
+} as const;
 
 export const spacing = {
   pageHorizontalMargin: 16, // spacing[4]
@@ -168,11 +178,68 @@ export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   // If the device is not compatible, it will return a theme based on the fallback source color (optional, default to #6750A4)
-  const { theme, updateTheme, resetTheme } = useMaterial3Theme({
-    fallbackSourceColor: '0x005500',
+  const { theme, updateTheme } = useMaterial3Theme({
+    fallbackSourceColor: '0xC6FF00',
     sourceColor: colorSchemeSeed === 'default' ? undefined! : colorSchemeSeed,
   });
-  let newTheme = theme;
+  let newTheme: { light: Material3Scheme; dark: Material3Scheme } = {
+    light: {
+      ...theme.light,
+      primary: '#4A6800',
+      onPrimary: '#FFFFFF',
+      primaryContainer: '#DDF7A0',
+      onPrimaryContainer: '#182600',
+      secondary: '#526044',
+      onSecondary: '#FFFFFF',
+      secondaryContainer: '#D6E8C7',
+      onSecondaryContainer: '#101E08',
+      background: '#F5F7F3',
+      onBackground: '#191D19',
+      surface: '#F9FBF7',
+      onSurface: '#191D19',
+      surfaceVariant: '#E1E5DD',
+      onSurfaceVariant: '#42483F',
+      surfaceContainerLowest: '#FFFFFF',
+      surfaceContainerLow: '#F1F4EE',
+      surfaceContainer: '#EBEFE8',
+      surfaceContainerHigh: '#E5E9E2',
+      surfaceContainerHighest: '#DFE3DC',
+      outline: '#73796F',
+      outlineVariant: '#C2C8BD',
+      error: '#BA1A1A',
+      onError: '#FFFFFF',
+      errorContainer: '#FFDAD6',
+      onErrorContainer: '#410002',
+    },
+    dark: {
+      ...theme.dark,
+      primary: gainsLab.acid,
+      onPrimary: '#172100',
+      primaryContainer: '#304600',
+      onPrimaryContainer: '#E2FF9E',
+      secondary: '#B9CBAA',
+      onSecondary: '#25351D',
+      secondaryContainer: '#3B4B32',
+      onSecondaryContainer: '#D5E7C5',
+      background: gainsLab.ink,
+      onBackground: '#E4E8E2',
+      surface: gainsLab.ink,
+      onSurface: '#E4E8E2',
+      surfaceVariant: '#41473E',
+      onSurfaceVariant: '#C2C8BE',
+      surfaceContainerLowest: '#070908',
+      surfaceContainerLow: '#111411',
+      surfaceContainer: gainsLab.inkSoft,
+      surfaceContainerHigh: '#1B1F1C',
+      surfaceContainerHighest: '#252A26',
+      outline: '#8C9388',
+      outlineVariant: '#41483F',
+      error: '#FFB4AB',
+      onError: '#690005',
+      errorContainer: '#93000A',
+      onErrorContainer: '#FFDAD6',
+    },
+  };
   if (trueBlack) {
     newTheme = {
       ...newTheme,
@@ -181,7 +248,7 @@ export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({
   }
   useEffect(() => {
     if (colorSchemeSeed === 'default') {
-      resetTheme();
+      updateTheme(gainsLab.acid);
     } else {
       updateTheme(colorSchemeSeed);
     }
@@ -193,7 +260,7 @@ export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({
   const paperTheme = isDark
     ? { ...MD3DarkTheme, colors: newTheme.dark }
     : { ...MD3LightTheme, colors: newTheme.light };
-  const appTheme = {
+  const appTheme: AppTheme = {
     colors: {
       ...schemedTheme,
       ...colorPair('orange', 'ffffa500', schemedTheme.primary, isDark),
@@ -210,7 +277,7 @@ export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({
       ...colorPair('lime', 'ffcddc39', schemedTheme.primary, isDark),
       ...colorPair('amber', 'ffffc107', schemedTheme.primary, isDark),
     } satisfies AppThemeColors,
-    colorScheme: colorScheme === 'unspecified' ? 'light' : colorScheme,
+    colorScheme: isDark ? 'dark' : 'light',
   };
 
   const baseNavigationThem = isDark ? DarkTheme : DefaultTheme;

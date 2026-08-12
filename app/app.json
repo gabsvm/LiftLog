@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "LiftLog",
-    "slug": "liftlog",
-    "version": "1.0.0",
-    "userInterfaceStyle": "automatic",
+    "name": "GainsLab",
+    "slug": "gainslab",
+    "version": "1.1.1",
+    "userInterfaceStyle": "dark",
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/gainslab-favicon.png"
     },
-    "icon": "./assets/icon.png",
-    "backgroundColor": "#fcfdf6",
-    "primaryColor": "#046F03",
+    "icon": "./assets/gainslab-icon-clean.png",
+    "backgroundColor": "#0B0D0C",
+    "primaryColor": "#C6FF00",
     "plugins": [
       "expo-router",
       [
@@ -24,7 +25,7 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": false,
-          "NSHealthUpdateUsageDescription": "LiftLog would like to share your workout and/or body weight with Apple Health.",
+          "NSHealthUpdateUsageDescription": "GainsLab necesita compartir tus entrenamientos y peso corporal con Apple Health.",
           "background": false
         }
       ],
@@ -35,29 +36,37 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification.png"
+          "icon": "./assets/gainslab-monochrome.png",
+          "color": "#C6FF00"
         }
       ],
+      "expo-secure-store",
       "expo-sqlite",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#fcfdf6",
-          "image": "./assets/splash.png",
-          "resizeMode": "contain"
+          "backgroundColor": "#0B0D0C",
+          "image": "./assets/gainslab-splash.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0B0D0C",
+            "image": "./assets/gainslab-splash.png"
+          }
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "scheme": "liftlog",
+    "scheme": "gainslab",
     "android": {
-      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 1",
-      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.0.0\"}",
-      "package": "com.limajuice.liftlog",
+      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 2",
+      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.1.1\"}",
+      "package": "com.gabsvm.gainslab",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "com.android.vending.BILLING",
@@ -75,18 +84,23 @@
               "host": "app.liftlog.online"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#dfedda",
-        "foregroundImage": "./assets/icon_foreground.png",
-        "monochromeImage": "./assets/icon_monochrome.png"
+        "backgroundColor": "#0B0D0C",
+        "foregroundImage": "./assets/gainslab-adaptive-foreground.png",
+        "monochromeImage": "./assets/gainslab-monochrome-clean.png"
       }
     },
     "ios": {
-      "bundleIdentifier": "com.limajuice.liftlog",
-      "associatedDomains": ["applinks:app.liftlog.online"],
+      "bundleIdentifier": "com.gabsvm.gainslab",
+      "associatedDomains": [
+        "applinks:app.liftlog.online"
+      ],
       "supportsTablet": true,
       "infoPlist": {
         "UIViewControllerBasedStatusBarAppearance": true,

@@ -1,4 +1,6 @@
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
+import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
+import { ScreenHeading } from '@/components/presentation/foundation/screen-heading';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 import { Remote } from '@/components/presentation/foundation/remote';
 import { ExerciseListSummary } from '@/components/presentation/stats/exercise-list-summary';
@@ -18,7 +20,7 @@ import {
 import { formatDuration } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect } from 'expo-router';
-import { View, Text } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { useDispatch } from 'react-redux';
 import { match } from 'ts-pattern';
 
@@ -31,13 +33,23 @@ export default function StatsPage() {
   });
   const stats = useAppSelector(selectOverallView);
   return (
-    <FullHeightScrollView contentContainerStyle={{ gap: spacing[2] }}>
+    <FullHeightScrollView
+      scrollStyle={{ paddingHorizontal: spacing.pageHorizontalMargin }}
+      contentContainerStyle={styles.content}
+    >
       <Stack.Screen
         options={{
-          title: t('stats.statistics.title'),
+          title: t('navigation.progress'),
+          headerShown: false,
         }}
       />
-      <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+      <GainsLabWordmark compact />
+      <ScreenHeading
+        eyebrow={t('navigation.progress').toUpperCase()}
+        title={t('stats.statistics.title')}
+        subtitle={t('screen.stats.subtitle')}
+      />
+      <View style={styles.period}>
         <TimePeriodSelector
           timePeriod={timePeriod}
           setTimePeriod={(value) => dispatch(setOverallViewTime(value))}
@@ -53,12 +65,27 @@ export default function StatsPage() {
 
 function LoadedStats({ stats }: { stats: GranularStatisticView }) {
   return (
-    <View>
+    <View style={styles.loaded}>
       <OverallStatsGrid stats={stats} />
       <ExerciseListSummary stats={stats} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    gap: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[8],
+  },
+  period: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  loaded: {
+    gap: spacing[4],
+  },
+});
 
 function OverallStatsGrid({ stats }: { stats: GranularStatisticView }) {
   const { t } = useTranslate();

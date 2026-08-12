@@ -7,8 +7,10 @@ import {
   toLocalDateJSON,
 } from '@/models/storage/versions/latest';
 import { programBlueprintMigrations } from '@/models/storage/versions/migrations';
+import { HersovyacPrograms } from '@/models/hersovyac-programs';
 
 export const BuiltInPrograms: Record<string, ProgramBlueprint> = {
+  ...HersovyacPrograms,
   'a303c855-9ed7-4ff8-ae60-11e9a573193e': ProgramBlueprint.fromJSON(
     programBlueprintMigrations.migrate({
       name: 'Starting Strength',

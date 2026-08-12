@@ -11,6 +11,9 @@ import { Stack, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
+import { StyleSheet, View } from 'react-native';
+import { Card, Text } from 'react-native-paper';
 
 export default function Index() {
   const dispatch = useDispatch();
@@ -62,13 +65,14 @@ export default function Index() {
       {keepAwake && <KeepAwake />}
       <Stack.Screen
         options={{
-          title: session?.blueprint.name ?? 'Workout',
+          title: t('workout.workout.label'),
         }}
       />
       <SessionMoreMenuComponent target="workoutSession" save={save} />
       <SessionComponent
         target="workoutSession"
         showBodyweight={showBodyweight}
+        header={session ? <LiveWorkoutHeader session={session} /> : undefined}
         openPostWorkoutSummary={() => {
           if (!session?.id) {
             return;
@@ -89,6 +93,105 @@ export default function Index() {
     </>
   );
 }
+
+function LiveWorkoutHeader({
+  session,
+}: {
+  session: NonNullable<ReturnType<typeof selectCurrentSession>>;
+}) {
+  const { colors } = useAppTheme();
+  const { t } = useTranslate();
+  const complete = session.recordedExercises.filter(
+    (exercise) => exercise.isComplete,
+  ).length;
+  const total = session.recordedExercises.length;
+  const progress = total === 0 ? 0 : complete / total;
+
+  return (
+    <View style={styles.liveHeader}>
+      <Text style={[styles.liveLabel, { color: colors.primary }]}>
+        {t('workout.live.label')}
+      </Text>
+      <Text variant="headlineMedium" style={styles.liveTitle}>
+        {session.blueprint.name}
+      </Text>
+      <Card
+        mode="contained"
+        style={[
+          styles.progressCard,
+          { backgroundColor: colors.surfaceContainer },
+        ]}
+      >
+        <Card.Content style={styles.progressContent}>
+          <View style={{ flex: 1 }}>
+            <Text variant="labelLarge">
+              {t('workout.live.progress', { complete, total })}
+            </Text>
+            <View
+              style={[
+                styles.progressTrack,
+                { backgroundColor: colors.outlineVariant },
+              ]}
+            >
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: colors.primary,
+                    width: `${progress * 100}%`,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+          <Text
+            variant="titleLarge"
+            style={{ color: colors.primary, fontWeight: '800' }}
+          >
+            {Math.round(progress * 100)}%
+          </Text>
+        </Card.Content>
+      </Card>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  liveHeader: {
+    paddingHorizontal: spacing.pageHorizontalMargin,
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
+  },
+  liveLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  liveTitle: {
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    marginTop: spacing[1],
+    marginBottom: spacing[4],
+  },
+  progressCard: {
+    borderRadius: 18,
+  },
+  progressContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[4],
+  },
+  progressTrack: {
+    height: 6,
+    overflow: 'hidden',
+    borderRadius: 99,
+    marginTop: spacing[3],
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 99,
+  },
+});
 
 /**
  * Allows us to conditionally keep the screen awake, as we cannot use hooks conditionally
