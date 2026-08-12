@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
@@ -94,6 +95,8 @@ class WorkoutViewModel(
     val restTimer: StateFlow<RestTimerUiState> = _restTimer.asStateFlow()
     private val saveMutex = Mutex()
     private val importService = NativeWorkoutImportService(repository, routineRepository, exerciseRepository)
+    private var pendingSession: WorkoutSession? = null
+    private var persistJob: Job? = null
 
     init {
         loadSessions()
@@ -143,13 +146,14 @@ class WorkoutViewModel(
 
     fun uploadCloudBackup() {
         runCloudOperation {
+            val snapshot = readCompleteRepositorySnapshot()
             val json = withContext(Dispatchers.Default) {
                 NativeWorkoutExporter.encode(
-                    sessions = _uiState.value.sessions,
+                    sessions = snapshot.sessions,
                     exportedAtEpochMillis = System.currentTimeMillis(),
-                    routines = _uiState.value.routines,
-                    folders = _uiState.value.templateFolders,
-                    exerciseLibrary = _uiState.value.exercises,
+                    routines = snapshot.routines,
+                    folders = snapshot.folders,
+                    exerciseLibrary = snapshot.exercises,
                     settings = NativeWorkoutSettingsV1(_settings.value.defaultRestSeconds),
                 )
             }
@@ -571,12 +575,12 @@ class WorkoutViewModel(
 
     fun toggleSet(sessionExerciseId: String, set: LoggedSet) {
         val current = selectedSession() ?: return
-        val exercise = current.exercises.firstOrNull { it.id == sessionExerciseId } ?: return
-        val updatedSet = if (set.completedAtEpochMillis == null) {
-            set.copy(completedAtEpochMillis = System.currentTimeMillis())
-        } else {
-            set.copy(completedAtEpochMillis = null)
+        if (current.exercises.none { it.id == sessionExerciseId }) return
+        if (set.completedAtEpochMillis == null) {
+            completeSet(sessionExerciseId, set)
+            return
         }
+        val updatedSet = set.copy(completedAtEpochMillis = null)
         val updated = current.withSet(sessionExerciseId, updatedSet)
         _uiState.value = _uiState.value.copy(
             sessions = replaceSession(updated),
@@ -584,28 +588,25 @@ class WorkoutViewModel(
             infoMessage = null,
         )
         persist(updated)
-        if (set.completedAtEpochMillis == null) {
-            startRestTimer(
-                durationSeconds = exercise.restConfig?.defaultSeconds(
-                    exercise.restSeconds ?: _settings.value.defaultRestSeconds,
-                ) ?: (exercise.restSeconds ?: _settings.value.defaultRestSeconds),
-                sourceExerciseId = exercise.id,
-            )
-        }
     }
 
     fun saveSet(sessionExerciseId: String, set: LoggedSet) {
+        completeSet(sessionExerciseId, set)
+    }
+
+    fun completeSet(sessionExerciseId: String, set: LoggedSet) {
         val current = selectedSession() ?: return
         val exercise = current.exercises.firstOrNull { it.id == sessionExerciseId } ?: return
         val completedAt = System.currentTimeMillis()
         val candidate = set.copy(completedAtEpochMillis = completedAt)
-        val updatedSet = if (
-            com.liftlog.shared.domain.SessionProgressCalculator.isComplete(exercise.exercise.type, candidate)
-        ) {
-            candidate
-        } else {
-            set.copy(completedAtEpochMillis = null)
+        if (!com.liftlog.shared.domain.SessionProgressCalculator.isComplete(exercise.exercise.type, candidate)) {
+            _uiState.value = _uiState.value.copy(
+                error = "Completa los datos requeridos del set antes de marcarlo",
+                infoMessage = null,
+            )
+            return
         }
+        val updatedSet = candidate
         val updated = current.withSet(sessionExerciseId, updatedSet)
         _uiState.value = _uiState.value.copy(
             sessions = replaceSession(updated),
@@ -731,13 +732,14 @@ class WorkoutViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isExporting = true, error = null, infoMessage = null)
             try {
+                val snapshot = withContext(Dispatchers.IO) { readCompleteRepositorySnapshot() }
                 val json = withContext(Dispatchers.Default) {
                     NativeWorkoutExporter.encode(
-                        sessions = _uiState.value.sessions,
+                        sessions = snapshot.sessions,
                         exportedAtEpochMillis = System.currentTimeMillis(),
-                        routines = _uiState.value.routines,
-                        folders = _uiState.value.templateFolders,
-                        exerciseLibrary = _uiState.value.exercises,
+                        routines = snapshot.routines,
+                        folders = snapshot.folders,
+                        exerciseLibrary = snapshot.exercises,
                         settings = NativeWorkoutSettingsV1(_settings.value.defaultRestSeconds),
                     )
                 }
@@ -748,7 +750,7 @@ class WorkoutViewModel(
                 }
                 _uiState.value = _uiState.value.copy(
                     isExporting = false,
-                    infoMessage = "Exportación completada: ${_uiState.value.sessions.size} sesiones",
+                    infoMessage = "Exportación completada: ${snapshot.sessions.size} sesiones",
                 )
             } catch (error: Throwable) {
                 _uiState.value = _uiState.value.copy(
@@ -763,19 +765,44 @@ class WorkoutViewModel(
         viewModelScope.launch {
             try {
                 val data = withContext(Dispatchers.IO) {
-                    val existing = repository.list(MAX_SESSIONS)
-                    if (existing.isEmpty() && !migrationPreferences.getBoolean(LEGACY_MIGRATION_DONE_KEY, false)) {
-                        legacyImporter?.readExport()?.let { legacyExport ->
-                            val hasLegacyData = legacyExport.sessions.isNotEmpty() ||
-                                legacyExport.routines.isNotEmpty() ||
-                                legacyExport.exerciseLibrary.isNotEmpty()
-                            val result = saveMutex.withLock { importService.importExport(legacyExport) }
-                            migrationPreferences.edit().putBoolean(LEGACY_MIGRATION_DONE_KEY, true).apply()
-                            Log.i(
-                                LEGACY_IMPORT_TAG,
-                                "Legacy migration finished: data=$hasLegacyData sessions=${result.importedSessions} " +
-                                    "routines=${result.importedRoutines} exercises=${result.importedExercises}",
-                            )
+                    val migrationVersion = migrationPreferences.getInt(
+                        LEGACY_MIGRATION_VERSION_KEY,
+                        if (migrationPreferences.getBoolean(LEGACY_MIGRATION_DONE_KEY, false)) {
+                            CURRENT_LEGACY_MIGRATION_VERSION
+                        } else {
+                            0
+                        },
+                    )
+                    if (migrationVersion < CURRENT_LEGACY_MIGRATION_VERSION && legacyImporter != null) {
+                        if (!legacyImporter.hasLegacyDatabase()) {
+                            migrationPreferences.edit()
+                                .putInt(LEGACY_MIGRATION_VERSION_KEY, CURRENT_LEGACY_MIGRATION_VERSION)
+                                .putString(LEGACY_MIGRATION_REPORT_KEY, "status=NO_LEGACY_DATABASE")
+                                .apply()
+                        } else {
+                            val readResult = legacyImporter.readExport()
+                                ?: error("No se pudo leer la base legacy; la migración se reintentará")
+                            check(readResult.isComplete) {
+                                "Migración incompleta: ${readResult.skippedRows} filas legacy no pudieron procesarse " +
+                                    "(sessions=${readResult.sourceSessions}/${readResult.parsedSessions}, " +
+                                    "programs=${readResult.sourcePrograms}/${readResult.parsedProgramRows}, " +
+                                    "exercises=${readResult.sourceExercises}/${readResult.parsedExercises})"
+                            }
+                            val result = saveMutex.withLock { importService.importExport(readResult.export) }
+                            val storedSessions = repository.listAll()
+                            check(readResult.export.sessions.all { imported -> storedSessions.any { it.id == imported.id } }) {
+                                "La migración no pasó la verificación de lectura de sesiones"
+                            }
+                            val report = "status=SUCCESS;sourceSessions=${readResult.sourceSessions};nativeSessions=${storedSessions.size};" +
+                                "sourcePrograms=${readResult.sourcePrograms};nativeRoutines=${routineRepository.listAll().size};" +
+                                "sourceExercises=${readResult.sourceExercises};nativeExercises=${exerciseRepository.list(includeArchived = true).size};" +
+                                "skippedRows=${readResult.skippedRows}"
+                            migrationPreferences.edit()
+                                .putInt(LEGACY_MIGRATION_VERSION_KEY, CURRENT_LEGACY_MIGRATION_VERSION)
+                                .putBoolean(LEGACY_MIGRATION_DONE_KEY, true)
+                                .putString(LEGACY_MIGRATION_REPORT_KEY, report)
+                                .apply()
+                            Log.i(LEGACY_IMPORT_TAG, "Legacy migration finished: $report importedSessions=${result.importedSessions}")
                         }
                     }
                     val sessions = repository.list(MAX_SESSIONS)
@@ -828,6 +855,22 @@ class WorkoutViewModel(
         }
     }
 
+    private data class NativeRepositorySnapshot(
+        val sessions: List<WorkoutSession>,
+        val routines: List<WorkoutRoutine>,
+        val folders: List<WorkoutTemplateFolder>,
+        val exercises: List<ExerciseDefinition>,
+    )
+
+    private suspend fun readCompleteRepositorySnapshot(): NativeRepositorySnapshot {
+        return NativeRepositorySnapshot(
+            sessions = repository.listAll(),
+            routines = routineRepository.listAll(),
+            folders = routineRepository.listAllFolders(),
+            exercises = exerciseRepository.list(includeArchived = true),
+        )
+    }
+
     private suspend fun readRepositoryData(): Pair<List<WorkoutSession>, Pair<List<WorkoutRoutine>, Pair<List<WorkoutTemplateFolder>, List<ExerciseDefinition>>>> {
         val sessions = repository.list(MAX_SESSIONS)
         val routines = routineRepository.list(MAX_ROUTINES)
@@ -861,10 +904,15 @@ class WorkoutViewModel(
     }
 
     private fun persist(session: WorkoutSession) {
-        viewModelScope.launch {
+        pendingSession = session
+        persistJob?.cancel()
+        persistJob = viewModelScope.launch {
+            delay(300)
+            val pending = pendingSession ?: return@launch
+            pendingSession = null
             runCatching {
                 withContext(Dispatchers.IO) {
-                    saveMutex.withLock { repository.save(session) }
+                    saveMutex.withLock { repository.save(pending) }
                 }
             }.onFailure { error ->
                 _uiState.value = _uiState.value.copy(
@@ -960,6 +1008,9 @@ class WorkoutViewModel(
         const val REST_TIMER_PREFS = "liftlog_rest_timer"
         const val MIGRATION_PREFS = "liftlog_migrations"
         const val LEGACY_MIGRATION_DONE_KEY = "expo_database_v1_done"
+        const val LEGACY_MIGRATION_VERSION_KEY = "expo_database_migration_version"
+        const val LEGACY_MIGRATION_REPORT_KEY = "expo_database_migration_report"
+        const val CURRENT_LEGACY_MIGRATION_VERSION = 2
         const val DEFAULT_ROUTINES_SEEDED_KEY = "default_routines_seeded_v1"
         const val LEGACY_IMPORT_TAG = "LiftLogLegacyImport"
         const val REST_TIMER_END_KEY = "end_epoch_millis"

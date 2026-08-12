@@ -37,12 +37,14 @@ class SQLiteExerciseRepository(
     }
 
     override suspend fun save(exercise: ExerciseDefinition) {
-        database.writableDatabase.insertWithOnConflict(
-            "exercise_library",
-            null,
-            values(exercise),
-            android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE,
-        )
+        database.withTransaction {
+            database.writableDatabase.insertWithOnConflict(
+                "exercise_library",
+                null,
+                values(exercise),
+                android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE,
+            )
+        }
     }
 
     private fun readExercise(cursor: Cursor): ExerciseDefinition = ExerciseDefinition(

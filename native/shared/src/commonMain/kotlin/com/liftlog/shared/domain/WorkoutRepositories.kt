@@ -11,9 +11,15 @@ interface ExerciseRepository {
     }
 }
 
+/** Optional capability used when a complete import must be all-or-nothing. */
+interface TransactionalRepository {
+    suspend fun <T> withTransaction(block: suspend () -> T): T
+}
+
 interface WorkoutSessionRepository {
     suspend fun getById(id: String): WorkoutSession?
     suspend fun list(limit: Int = 50): List<WorkoutSession>
+    suspend fun listAll(): List<WorkoutSession> = list(Int.MAX_VALUE)
     suspend fun save(session: WorkoutSession)
 
     /** Implementations may override this to make a multi-session import atomic. */
@@ -25,11 +31,13 @@ interface WorkoutSessionRepository {
 interface RoutineRepository {
     suspend fun getById(id: String): WorkoutRoutine?
     suspend fun list(limit: Int = 50): List<WorkoutRoutine>
+    suspend fun listAll(): List<WorkoutRoutine> = list(Int.MAX_VALUE)
     suspend fun save(routine: WorkoutRoutine)
     suspend fun delete(id: String)
 
     /** Folder support is optional for early platform adapters. */
     suspend fun listFolders(limit: Int = 50): List<WorkoutTemplateFolder> = emptyList()
+    suspend fun listAllFolders(): List<WorkoutTemplateFolder> = listFolders(Int.MAX_VALUE)
     suspend fun saveFolder(folder: WorkoutTemplateFolder) = Unit
     suspend fun deleteFolder(id: String) = Unit
 

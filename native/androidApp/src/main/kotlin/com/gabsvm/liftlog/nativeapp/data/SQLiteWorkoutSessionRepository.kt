@@ -10,6 +10,7 @@ import com.liftlog.shared.domain.ProgressionRule
 import com.liftlog.shared.domain.RestConfig
 import com.liftlog.shared.domain.SessionExercise
 import com.liftlog.shared.domain.SetType
+import com.liftlog.shared.domain.TransactionalRepository
 import com.liftlog.shared.domain.WeightUnit
 import com.liftlog.shared.domain.WorkoutSession
 import com.liftlog.shared.domain.WorkoutSessionRepository
@@ -17,7 +18,7 @@ import com.liftlog.shared.migration.NativeWorkoutImporter
 
 class SQLiteWorkoutSessionRepository(
     private val database: LiftLogDatabase,
-) : WorkoutSessionRepository {
+) : WorkoutSessionRepository, TransactionalRepository {
     override suspend fun getById(id: String): WorkoutSession? {
         database.readableDatabase.query(
             "workout_sessions",
@@ -34,7 +35,14 @@ class SQLiteWorkoutSessionRepository(
     }
 
     override suspend fun list(limit: Int): List<WorkoutSession> {
-        val safeLimit = limit.coerceIn(1, 500).toString()
+        return listInternal(limit.coerceIn(1, 500).toString())
+    }
+
+    override suspend fun listAll(): List<WorkoutSession> = listInternal(null)
+
+    override suspend fun <T> withTransaction(block: suspend () -> T): T = database.withTransaction(block)
+
+    private fun listInternal(limit: String?): List<WorkoutSession> {
         database.readableDatabase.query(
             "workout_sessions",
             SESSION_COLUMNS,
@@ -43,7 +51,7 @@ class SQLiteWorkoutSessionRepository(
             null,
             null,
             "started_at DESC",
-            safeLimit,
+            limit,
         ).use { cursor ->
             return buildList {
                 while (cursor.moveToNext()) add(readSession(cursor))
@@ -52,25 +60,14 @@ class SQLiteWorkoutSessionRepository(
     }
 
     override suspend fun save(session: WorkoutSession) {
-        val db = database.writableDatabase
-        db.beginTransaction()
-        try {
-            writeSession(db, session)
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
+        database.withTransaction { writeSession(database.writableDatabase, session) }
     }
 
     override suspend fun saveAll(sessions: List<WorkoutSession>) {
         if (sessions.isEmpty()) return
-        val db = database.writableDatabase
-        db.beginTransaction()
-        try {
+        database.withTransaction {
+            val db = database.writableDatabase
             sessions.forEach { writeSession(db, it) }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
     }
 

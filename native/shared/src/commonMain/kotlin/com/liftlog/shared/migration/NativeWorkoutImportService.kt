@@ -2,6 +2,7 @@ package com.liftlog.shared.migration
 
 import com.liftlog.shared.domain.ExerciseRepository
 import com.liftlog.shared.domain.RoutineRepository
+import com.liftlog.shared.domain.TransactionalRepository
 import com.liftlog.shared.domain.WorkoutSessionRepository
 
 data class NativeWorkoutImportResult(
@@ -23,17 +24,20 @@ class NativeWorkoutImportService(
 
     suspend fun importExport(export: NativeWorkoutExportV1): NativeWorkoutImportResult {
         val bundle = NativeWorkoutImporter.importBundle(export)
-        repository.saveAll(bundle.sessions)
-        routineRepository?.let { folders ->
-            for (folder in bundle.folders) folders.saveFolder(folder)
+        suspend fun persist(): NativeWorkoutImportResult {
+            repository.saveAll(bundle.sessions)
+            routineRepository?.let { folders ->
+                for (folder in bundle.folders) folders.saveFolder(folder)
+            }
+            routineRepository?.saveAll(bundle.routines)
+            exerciseRepository?.saveAll(bundle.exerciseLibrary)
+            return NativeWorkoutImportResult(
+                importedSessions = bundle.sessions.size,
+                importedRoutines = bundle.routines.size,
+                importedExercises = bundle.exerciseLibrary.size,
+                settings = bundle.settings,
+            )
         }
-        routineRepository?.saveAll(bundle.routines)
-        exerciseRepository?.saveAll(bundle.exerciseLibrary)
-        return NativeWorkoutImportResult(
-            importedSessions = bundle.sessions.size,
-            importedRoutines = bundle.routines.size,
-            importedExercises = bundle.exerciseLibrary.size,
-            settings = bundle.settings,
-        )
+        return (repository as? TransactionalRepository)?.withTransaction { persist() } ?: persist()
     }
 }

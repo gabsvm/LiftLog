@@ -29,7 +29,12 @@ class SQLiteRoutineRepository(
         ).use { cursor -> if (cursor.moveToFirst()) readRoutine(cursor) else null }
 
     override suspend fun list(limit: Int): List<WorkoutRoutine> {
-        val safeLimit = limit.coerceIn(1, 200).toString()
+        return listInternal(limit.coerceIn(1, 200).toString())
+    }
+
+    override suspend fun listAll(): List<WorkoutRoutine> = listInternal(null)
+
+    private fun listInternal(limit: String?): List<WorkoutRoutine> {
         return database.readableDatabase.query(
             "workout_routines",
             ROUTINE_COLUMNS,
@@ -38,24 +43,20 @@ class SQLiteRoutineRepository(
             null,
             null,
             "updated_at DESC",
-            safeLimit,
+            limit,
         ).use { cursor ->
             buildList { while (cursor.moveToNext()) add(readRoutine(cursor)) }
         }
     }
 
     override suspend fun save(routine: WorkoutRoutine) {
-        val db = database.writableDatabase
-        db.beginTransaction()
-        try {
+        database.withTransaction {
+            val db = database.writableDatabase
             db.delete("workout_routines", "id = ?", arrayOf(routine.id))
             db.insertOrThrow("workout_routines", null, routineValues(routine))
             routine.exercises.forEach { exercise ->
                 db.insertOrThrow("routine_exercises", null, routineExerciseValues(routine.id, exercise))
             }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
         }
     }
 
@@ -64,7 +65,12 @@ class SQLiteRoutineRepository(
     }
 
     override suspend fun listFolders(limit: Int): List<WorkoutTemplateFolder> {
-        val safeLimit = limit.coerceIn(1, 200).toString()
+        return listFoldersInternal(limit.coerceIn(1, 200).toString())
+    }
+
+    override suspend fun listAllFolders(): List<WorkoutTemplateFolder> = listFoldersInternal(null)
+
+    private fun listFoldersInternal(limit: String?): List<WorkoutTemplateFolder> {
         return database.readableDatabase.query(
             "workout_template_folders",
             FOLDER_COLUMNS,
@@ -73,25 +79,27 @@ class SQLiteRoutineRepository(
             null,
             null,
             "updated_at DESC",
-            safeLimit,
+            limit,
         ).use { cursor ->
             buildList { while (cursor.moveToNext()) add(readFolder(cursor)) }
         }
     }
 
     override suspend fun saveFolder(folder: WorkoutTemplateFolder) {
-        val values = ContentValues().apply {
-            put("id", folder.id)
-            put("name", folder.name)
-            put("created_at", folder.createdAtEpochMillis)
-            put("updated_at", folder.updatedAtEpochMillis)
+        database.withTransaction {
+            val values = ContentValues().apply {
+                put("id", folder.id)
+                put("name", folder.name)
+                put("created_at", folder.createdAtEpochMillis)
+                put("updated_at", folder.updatedAtEpochMillis)
+            }
+            database.writableDatabase.insertWithOnConflict(
+                "workout_template_folders",
+                null,
+                values,
+                android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE,
+            )
         }
-        database.writableDatabase.insertWithOnConflict(
-            "workout_template_folders",
-            null,
-            values,
-            android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE,
-        )
     }
 
     override suspend fun deleteFolder(id: String) {

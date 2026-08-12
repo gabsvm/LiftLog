@@ -33,6 +33,23 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.Locale
 
+data class LegacyImportReadResult(
+    val export: NativeWorkoutExportV1,
+    val sourceSessions: Int,
+    val parsedSessions: Int,
+    val sourcePrograms: Int,
+    val parsedProgramRows: Int,
+    val sourceExercises: Int,
+    val parsedExercises: Int,
+) {
+    val skippedRows: Int
+        get() = (sourceSessions - parsedSessions).coerceAtLeast(0) +
+            (sourcePrograms - parsedProgramRows).coerceAtLeast(0) +
+            (sourceExercises - parsedExercises).coerceAtLeast(0)
+
+    val isComplete: Boolean get() = skippedRows == 0
+}
+
 /**
  * Reads the Expo/Drizzle database without modifying it. It is only used by a
  * production-package migration build on first launch; malformed legacy rows
@@ -41,7 +58,9 @@ import java.util.Locale
 class LegacyExpoDatabaseImporter(
     private val context: Context,
 ) {
-    fun readExport(): NativeWorkoutExportV1? {
+    fun hasLegacyDatabase(): Boolean = context.getDatabasePath(LEGACY_DATABASE_NAME).exists()
+
+    fun readExport(): LegacyImportReadResult? {
         val databaseFile = context.getDatabasePath(LEGACY_DATABASE_NAME)
         if (!databaseFile.exists()) return null
 
@@ -54,14 +73,22 @@ class LegacyExpoDatabaseImporter(
                 val sessions = readSessions(database)
                 val routines = readRoutines(database)
                 val exercises = readExerciseLibrary(database)
-                NativeWorkoutExportV1(
-                    format = NATIVE_WORKOUT_EXPORT_FORMAT,
-                    schemaVersion = NATIVE_WORKOUT_EXPORT_SCHEMA_VERSION,
-                    exportedAtEpochMillis = System.currentTimeMillis(),
-                    sourceApplicationId = LEGACY_APPLICATION_ID,
-                    sessions = sessions,
-                    routines = routines,
-                    exerciseLibrary = exercises,
+                LegacyImportReadResult(
+                    export = NativeWorkoutExportV1(
+                        format = NATIVE_WORKOUT_EXPORT_FORMAT,
+                        schemaVersion = NATIVE_WORKOUT_EXPORT_SCHEMA_VERSION,
+                        exportedAtEpochMillis = System.currentTimeMillis(),
+                        sourceApplicationId = LEGACY_APPLICATION_ID,
+                        sessions = sessions.values,
+                        routines = routines.values,
+                        exerciseLibrary = exercises.values,
+                    ),
+                    sourceSessions = sessions.sourceRows,
+                    parsedSessions = sessions.parsedRows,
+                    sourcePrograms = routines.sourceRows,
+                    parsedProgramRows = routines.parsedRows,
+                    sourceExercises = exercises.sourceRows,
+                    parsedExercises = exercises.parsedRows,
                 )
             }
         }.onFailure { error ->
@@ -69,43 +96,55 @@ class LegacyExpoDatabaseImporter(
         }.getOrNull()
     }
 
-    private fun readSessions(database: SQLiteDatabase): List<NativeWorkoutSessionV1> {
-        if (!hasTable(database, "session")) return emptyList()
-        return database.query("session", arrayOf("id", "payload"), null, null, null, null, null).use { cursor ->
+    private fun readSessions(database: SQLiteDatabase): ParsedRows<NativeWorkoutSessionV1> {
+        if (!hasTable(database, "session")) return ParsedRows.empty()
+        var sourceRows = 0
+        var parsedRows = 0
+        val values = database.query("session", arrayOf("id", "payload"), null, null, null, null, null).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
+                    sourceRows++
                     val id = cursor.getString(cursor.getColumnIndexOrThrow("id"))
                     val payload = cursor.getString(cursor.getColumnIndexOrThrow("payload"))
-                    parseSession(id, payload)?.let(::add)
+                    parseSession(id, payload)?.let { parsedRows++; add(it) }
                 }
             }
         }
+        return ParsedRows(values, sourceRows, parsedRows)
     }
 
-    private fun readRoutines(database: SQLiteDatabase): List<NativeWorkoutRoutineV1> {
-        if (!hasTable(database, "program")) return emptyList()
-        return database.query("program", arrayOf("id", "payload"), null, null, null, null, null).use { cursor ->
+    private fun readRoutines(database: SQLiteDatabase): ParsedRows<NativeWorkoutRoutineV1> {
+        if (!hasTable(database, "program")) return ParsedRows.empty()
+        var sourceRows = 0
+        var parsedRows = 0
+        val values = database.query("program", arrayOf("id", "payload"), null, null, null, null, null).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
+                    sourceRows++
                     val id = cursor.getString(cursor.getColumnIndexOrThrow("id"))
                     val payload = cursor.getString(cursor.getColumnIndexOrThrow("payload"))
-                    parseProgram(id, payload)?.let { routines -> addAll(routines) }
+                    parseProgram(id, payload)?.let { routines -> parsedRows++; addAll(routines) }
                 }
             }
         }
+        return ParsedRows(values, sourceRows, parsedRows)
     }
 
-    private fun readExerciseLibrary(database: SQLiteDatabase): List<NativeWorkoutExerciseDefinitionV1> {
-        if (!hasTable(database, "exercise")) return emptyList()
-        return database.query("exercise", arrayOf("id", "payload"), null, null, null, null, null).use { cursor ->
+    private fun readExerciseLibrary(database: SQLiteDatabase): ParsedRows<NativeWorkoutExerciseDefinitionV1> {
+        if (!hasTable(database, "exercise")) return ParsedRows.empty()
+        var sourceRows = 0
+        var parsedRows = 0
+        val values = database.query("exercise", arrayOf("id", "payload"), null, null, null, null, null).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
+                    sourceRows++
                     val id = cursor.getString(cursor.getColumnIndexOrThrow("id"))
                     val payload = cursor.getString(cursor.getColumnIndexOrThrow("payload"))
-                    parseExerciseDescriptor(id, payload)?.let(::add)
+                    parseExerciseDescriptor(id, payload)?.let { parsedRows++; add(it) }
                 }
             }
         }
+        return ParsedRows(values, sourceRows, parsedRows)
     }
 
     private fun parseSession(id: String, payload: String): NativeWorkoutSessionV1? = runCatching {
@@ -328,6 +367,16 @@ class LegacyExpoDatabaseImporter(
         "kilograms" -> NativeExportWeightUnit.KILOGRAMS
         "pounds" -> NativeExportWeightUnit.POUNDS
         else -> null
+    }
+
+    private data class ParsedRows<T>(
+        val values: List<T>,
+        val sourceRows: Int,
+        val parsedRows: Int,
+    ) {
+        companion object {
+            fun <T> empty() = ParsedRows<T>(emptyList(), 0, 0)
+        }
     }
 
     private companion object {

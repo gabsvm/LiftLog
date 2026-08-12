@@ -7,6 +7,19 @@ import android.database.sqlite.SQLiteOpenHelper
 class LiftLogDatabase(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
+    suspend fun <T> withTransaction(block: suspend () -> T): T {
+        val db = writableDatabase
+        val ownsTransaction = !db.inTransaction()
+        if (ownsTransaction) db.beginTransaction()
+        return try {
+            val result = block()
+            if (ownsTransaction) db.setTransactionSuccessful()
+            result
+        } finally {
+            if (ownsTransaction) db.endTransaction()
+        }
+    }
+
     override fun onConfigure(db: SQLiteDatabase) {
         db.setForeignKeyConstraintsEnabled(true)
     }
