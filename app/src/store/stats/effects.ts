@@ -4,7 +4,6 @@ import { fetchOverallStats, setOverallStats } from './index';
 import { AddEffectFn } from '@/store/store';
 import { selectSessionsBy } from '@/store/stored-sessions';
 
-import { sleep } from '@/utils/sleep';
 import { RemoteData } from '@/models/remote';
 import { selectPreferredWeightUnit } from '../settings';
 import { calculateStats } from '@/store/stats/calculate-stats';
@@ -22,7 +21,6 @@ export function applyStatsEffects(addEffect: AddEffectFn) {
     }
 
     dispatch(setOverallStats(RemoteData.loading()));
-    await sleep(200);
     try {
       let timeframe = state.stats.overallViewTime;
       if (timeframe === 'all-time') {
