@@ -25,7 +25,7 @@ import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { DatabaseImportService } from '@/services/database-import-service';
 
-export type Services = Awaited<ReturnType<typeof resolveServicesInternal>>;
+export type Services = ReturnType<typeof resolveServicesInternal>;
 
 let resolvedServices: Services | undefined;
 
@@ -37,71 +37,103 @@ function resolveServicesInternal(
   if (!store) {
     throw new Error('Tried to resolve services without store');
   }
+
+  // Keep the small services used by startup and every workout eager. Everything
+  // feature-specific is exposed through a getter so constructing the service
+  // container does not initialize crypto, Feed, AI, Health, or file APIs.
   const logger = new Logger();
   const keyValueStore = new KeyValueStore();
   const progressRepository = new ProgressRepository(store.getState);
   const sessionService = new SessionService(progressRepository, store.getState);
-  const notificationService = new NotificationService(
-    store.getState,
-    store.dispatch,
-  );
-  const encryptionService = new EncryptionService();
-  const feedApiService = new FeedApiService();
-  const feedIdentityService = new FeedIdentityService(
-    feedApiService,
-    encryptionService,
-  );
-  const feedInboxDecryptionService = new FeedInboxDecryptionService(
-    encryptionService,
-    feedApiService,
-  );
-  const feedFollowService = new FeedFollowService(
-    feedApiService,
-    encryptionService,
-  );
-  const stringSharer = new StringSharer();
-  const fileExportService = new FileExportService();
-  const filePickerService = new FilePickerService();
   const preferenceService = new PreferenceService(keyValueStore);
-  const aiChatService = new AiChatService(
-    new HubConnectionFactory(),
-    store.getState,
-  );
   const tolgee = getTolgee(preferenceService);
   const workoutWorkerService = new WorkoutWorker(
     store.dispatch,
     store.getState,
     tolgee,
   );
-  const healthExportService: HES = new HealthExportService();
   const databaseMigrationService = new DatabaseMigrationService(
     db,
     logger,
     new DatabaseImportService(db, keyValueStore, preferenceService),
   );
 
+  let notificationService: NotificationService | undefined;
+  let encryptionService: EncryptionService | undefined;
+  let feedApiService: FeedApiService | undefined;
+  let feedIdentityService: FeedIdentityService | undefined;
+  let feedInboxDecryptionService: FeedInboxDecryptionService | undefined;
+  let feedFollowService: FeedFollowService | undefined;
+  let stringSharer: StringSharer | undefined;
+  let fileExportService: FileExportService | undefined;
+  let filePickerService: FilePickerService | undefined;
+  let aiChatService: AiChatService | undefined;
+  let healthExportService: HES | undefined;
+
+  const getEncryptionService = () =>
+    (encryptionService ??= new EncryptionService());
+  const getFeedApiService = () => (feedApiService ??= new FeedApiService());
+
   return {
     logger,
     keyValueStore,
     progressRepository,
     sessionService,
-    notificationService,
-    encryptionService,
-    feedFollowService,
-    feedInboxDecryptionService,
-    feedApiService,
-    feedIdentityService,
-    healthExportService,
-    stringSharer,
-    fileExportService,
-    filePickerService,
     preferenceService,
-    aiChatService,
     workoutWorkerService,
     tolgee,
     db,
     expoDb,
     databaseMigrationService,
+
+    get notificationService() {
+      return (notificationService ??= new NotificationService(
+        store.getState,
+        store.dispatch,
+      ));
+    },
+    get encryptionService() {
+      return getEncryptionService();
+    },
+    get feedApiService() {
+      return getFeedApiService();
+    },
+    get feedIdentityService() {
+      return (feedIdentityService ??= new FeedIdentityService(
+        getFeedApiService(),
+        getEncryptionService(),
+      ));
+    },
+    get feedInboxDecryptionService() {
+      return (feedInboxDecryptionService ??= new FeedInboxDecryptionService(
+        getEncryptionService(),
+        getFeedApiService(),
+      ));
+    },
+    get feedFollowService() {
+      return (feedFollowService ??= new FeedFollowService(
+        getFeedApiService(),
+        getEncryptionService(),
+      ));
+    },
+    get stringSharer() {
+      return (stringSharer ??= new StringSharer());
+    },
+    get fileExportService() {
+      return (fileExportService ??= new FileExportService());
+    },
+    get filePickerService() {
+      return (filePickerService ??= new FilePickerService());
+    },
+    get aiChatService() {
+      return (aiChatService ??= new AiChatService(
+        new HubConnectionFactory(),
+        store.getState,
+      ));
+    },
+    get healthExportService(): HES {
+      return (healthExportService ??= new HealthExportService());
+    },
   };
 }
 
