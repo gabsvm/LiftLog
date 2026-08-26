@@ -1,23 +1,30 @@
-import { AddEffectFn } from '@/store/store';
+import { AddEffectFn, RootState } from '@/store/store';
 import {
   addStoredSession,
   checkIfWeightMigrationRequired,
   deleteExercise,
   deleteStoredSession,
+  ensureHistoryHydrated,
   initializeStoredSessionsStateSlice,
   migrateExerciseWeights,
+  selectLatestExercises,
   selectSessions,
   setExercises,
   setExercisesRequiringWeightMigration,
   setIsHydrated,
+  setLatestExercises,
   setStoredSessions,
   updateExercise,
   upsertStoredSessions,
   WeightMigrateableExercise,
 } from './index';
 import { fetchUpcomingSessions } from '@/store/program';
-import Enumerable from 'linq';
-import { RecordedWeightedExercise, Session } from '@/models/session-models';
+import {
+  fromRecordedExerciseJSON,
+  RecordedExercise,
+  RecordedWeightedExercise,
+  Session,
+} from '@/models/session-models';
 import { setCurrentSession } from '@/store/current-session';
 import { exercisesSchema, sessionsSchema } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -27,11 +34,20 @@ import {
   fromExerciseDescriptorJSON,
   toExerciseDescriptorJSON,
 } from '@/models/exercise-models';
+import { RecordedExerciseJSON } from '@/models/storage/versions/latest';
+import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
 // We keep track of added builtin exerciseIds (which are the exercise name for builtins)
 // Then we make sure builtins don't get re-added if they are deleted
 const addedBuiltInExerciseIdsStorageKey = 'AddedBuiltInExerciseIdList';
+const latestExercisesCacheStorageKey = 'LatestExercisesCacheV1';
 const POST_STARTUP_MIGRATION_SCAN_DELAY_MS = 350;
+
+interface LatestExercisesCache {
+  version: 1;
+  sessionCount: number;
+  exercises: Record<string, RecordedExerciseJSON>;
+}
 
 export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
   // Dispatched AFTER settings, so we can safely access settings
@@ -51,18 +67,52 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
         throw new Error('Settings must be hydrated before stored sessions');
       }
 
-      await logger.time('initializeStoredSessions', async () => {
-        const completedSessions = (
-          await db.select().from(sessionsSchema)
-        ).reduce(
-          toRecord(
-            (x) => x.id,
-            (row) => Session.fromJSON(row.payload),
-          ),
-          {},
+      const sessionCount = await getSessionCount(db);
+      let progressionCacheLoaded = false;
+      const cachedProgression = await keyValueStore.getItem(
+        latestExercisesCacheStorageKey,
+      );
+
+      if (cachedProgression) {
+        try {
+          const cache = JSON.parse(cachedProgression) as LatestExercisesCache;
+          if (cache.version === 1 && cache.sessionCount === sessionCount) {
+            const latestExercises = Object.fromEntries(
+              Object.entries(cache.exercises).map(([key, exercise]) => [
+                key,
+                fromRecordedExerciseJSON(exercise),
+              ]),
+            );
+            dispatch(setLatestExercises(latestExercises));
+            progressionCacheLoaded = true;
+          }
+        } catch (e) {
+          logger.error('Failed to restore latest exercise cache', e);
+        }
+      }
+
+      if (!progressionCacheLoaded) {
+        // One-time fallback for existing installs. Once this cache has been
+        // written, normal startups no longer deserialize the full history just
+        // to calculate the next workout.
+        await logger.time('initializeStoredSessionsFallback', async () => {
+          const completedSessions = (
+            await db.select().from(sessionsSchema)
+          ).reduce(
+            toRecord(
+              (x) => x.id,
+              (row) => Session.fromJSON(row.payload),
+            ),
+            {},
+          );
+          dispatch(setStoredSessions(completedSessions));
+        });
+        await persistLatestExercisesCache(
+          getState(),
+          db,
+          keyValueStore,
         );
-        dispatch(setStoredSessions(completedSessions));
-      });
+      }
 
       const { exercises: builtInExerciseList } =
         await import('../../../assets/exercises.json');
@@ -129,10 +179,11 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
         );
       }
 
-      // The nil-weight compatibility scan walks every historic session/set.
-      // It should not block the first usable frame of the application.
       dispatch(setIsHydrated(true));
       dispatch(fetchUpcomingSessions());
+
+      // The nil-weight compatibility scan walks historical data. Keep it out of
+      // the first usable frame; it can scan SQLite independently of Redux.
       setTimeout(
         () => dispatch(checkIfWeightMigrationRequired()),
         POST_STARTUP_MIGRATION_SCAN_DELAY_MS,
@@ -141,14 +192,38 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
   );
 
   addEffect(
+    ensureHistoryHydrated,
+    async (
+      _,
+      { cancelActiveListeners, getState, dispatch, extra: { db, logger } },
+    ) => {
+      cancelActiveListeners();
+      if (getState().storedSessions.isHistoryHydrated) return;
+
+      await logger.time('hydrateFullHistory', async () => {
+        const sessions = (await db.select().from(sessionsSchema)).reduce(
+          toRecord(
+            (x) => x.id,
+            (row) => Session.fromJSON(row.payload),
+          ),
+          {},
+        );
+        dispatch(setStoredSessions(sessions));
+      });
+    },
+  );
+
+  addEffect(
     checkIfWeightMigrationRequired,
-    (_, { dispatch, stateAfterReduce }) => {
-      const completedSessionsList = selectSessions(stateAfterReduce);
+    async (_, { dispatch, getState, extra: { db } }) => {
+      const state = getState();
+      const completedSessionsList = state.storedSessions.isHistoryHydrated
+        ? selectSessions(state)
+        : (await db.select().from(sessionsSchema)).map((row) =>
+            Session.fromJSON(row.payload),
+          );
       const migrationsByName = new Map<string, WeightMigrateableExercise>();
 
-      // This runs once after startup (and only exists for old nil-unit data), so
-      // use straight loops and stop scanning an exercise as soon as a nil set is
-      // found instead of building several LINQ intermediate enumerables.
       for (const session of completedSessionsList) {
         for (const exercise of session.recordedExercises) {
           if (!(exercise instanceof RecordedWeightedExercise)) continue;
@@ -172,44 +247,64 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     },
   );
 
-  addEffect(migrateExerciseWeights, (_, { dispatch, stateAfterReduce }) => {
-    const sessions = selectSessions(stateAfterReduce);
-    const migrations =
-      stateAfterReduce.storedSessions.exercisesRequiringWeightMigration;
-    const migrationUnits = new Map(migrations.map((x) => [x.name, x.unit]));
-    const applyWeightToSession = (session: Session) =>
-      session.with({
-        recordedExercises: session.recordedExercises.map((re) =>
-          re instanceof RecordedWeightedExercise
-            ? re.with({
-                potentialSets: re.potentialSets.map((ps) =>
-                  ps.with({
-                    weight: ps.weight.with({
-                      unit:
-                        ps.weight.unit === 'nil'
-                          ? (migrationUnits.get(re.blueprint.name) ?? 'nil')
-                          : ps.weight.unit,
+  addEffect(
+    migrateExerciseWeights,
+    async (
+      _,
+      {
+        dispatch,
+        getState,
+        extra: { db },
+      },
+    ) => {
+      const state = getState();
+      const historyWasHydrated = state.storedSessions.isHistoryHydrated;
+      const sessions = historyWasHydrated
+        ? selectSessions(state)
+        : (await db.select().from(sessionsSchema)).map((row) =>
+            Session.fromJSON(row.payload),
+          );
+      const migrations = state.storedSessions.exercisesRequiringWeightMigration;
+      const migrationUnits = new Map(migrations.map((x) => [x.name, x.unit]));
+      const applyWeightToSession = (session: Session) =>
+        session.with({
+          recordedExercises: session.recordedExercises.map((re) =>
+            re instanceof RecordedWeightedExercise
+              ? re.with({
+                  potentialSets: re.potentialSets.map((ps) =>
+                    ps.with({
+                      weight: ps.weight.with({
+                        unit:
+                          ps.weight.unit === 'nil'
+                            ? (migrationUnits.get(re.blueprint.name) ?? 'nil')
+                            : ps.weight.unit,
+                      }),
                     }),
                   }),
-                ),
-              })
-            : re,
-        ),
-      });
-    const newSessions = sessions.map(applyWeightToSession);
-    const currentSession = stateAfterReduce.currentSession.workoutSession;
-    if (currentSession) {
-      dispatch(
-        setCurrentSession({
-          target: 'workoutSession',
-          session: applyWeightToSession(currentSession),
-        }),
-      );
-    }
-    dispatch(upsertStoredSessions(newSessions));
-    dispatch(fetchUpcomingSessions());
-    dispatch(setExercisesRequiringWeightMigration([]));
-  });
+                })
+              : re,
+          ),
+        });
+      const newSessions = sessions.map(applyWeightToSession);
+      const currentSession = state.currentSession.workoutSession;
+      if (currentSession) {
+        dispatch(
+          setCurrentSession({
+            target: 'workoutSession',
+            session: applyWeightToSession(currentSession),
+          }),
+        );
+      }
+      dispatch(upsertStoredSessions(newSessions));
+      if (!historyWasHydrated) {
+        dispatch(
+          setStoredSessions(Object.fromEntries(newSessions.map((x) => [x.id, x]))),
+        );
+      }
+      dispatch(fetchUpcomingSessions());
+      dispatch(setExercisesRequiringWeightMigration([]));
+    },
+  );
 
   addEffect(
     addStoredSession,
@@ -229,13 +324,27 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     },
   );
 
-  addEffect(deleteStoredSession, async (action, { extra: { logger, db } }) => {
-    await logger.time('deleteStoredSession', async () => {
-      await db
-        .delete(sessionsSchema)
-        .where(eq(sessionsSchema.id, action.payload));
-    });
-  });
+  addEffect(
+    deleteStoredSession,
+    async (
+      action,
+      {
+        stateAfterReduce,
+        extra: { logger, db, keyValueStore },
+      },
+    ) => {
+      await logger.time('deleteStoredSession', async () => {
+        await db
+          .delete(sessionsSchema)
+          .where(eq(sessionsSchema.id, action.payload));
+      });
+      await persistLatestExercisesCache(
+        stateAfterReduce,
+        db,
+        keyValueStore,
+      );
+    },
+  );
   addEffect(
     deleteStoredSession,
     async (
@@ -259,7 +368,14 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
   addEffect(
     addStoredSession,
-    async (action, { cancelActiveListeners, extra: { db, logger } }) => {
+    async (
+      action,
+      {
+        cancelActiveListeners,
+        stateAfterReduce,
+        extra: { db, logger, keyValueStore },
+      },
+    ) => {
       cancelActiveListeners();
       await logger.time('addStoredSession', async () => {
         const payload = action.payload.toJSON();
@@ -276,12 +392,24 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
             },
           });
       });
+      await persistLatestExercisesCache(
+        stateAfterReduce,
+        db,
+        keyValueStore,
+      );
     },
   );
 
   addEffect(
     upsertStoredSessions,
-    async (action, { cancelActiveListeners, extra: { db, logger } }) => {
+    async (
+      action,
+      {
+        cancelActiveListeners,
+        stateAfterReduce,
+        extra: { db, logger, keyValueStore },
+      },
+    ) => {
       cancelActiveListeners();
       await logger.time('upsertStoredSessions', async () => {
         const toUpsert = action.payload.map((x) => ({
@@ -299,6 +427,11 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
             },
           });
       });
+      await persistLatestExercisesCache(
+        stateAfterReduce,
+        db,
+        keyValueStore,
+      );
     },
   );
 
@@ -342,5 +475,37 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
         }
       });
     },
+  );
+}
+
+async function getSessionCount(db: ExpoSQLiteDatabase): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(sessionsSchema);
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function persistLatestExercisesCache(
+  state: RootState,
+  db: ExpoSQLiteDatabase,
+  keyValueStore: {
+    setItem(key: string, value: string): Promise<void>;
+  },
+) {
+  const latestExercises = selectLatestExercises(state);
+  const exercises: Record<string, RecordedExerciseJSON> = {};
+  for (const [key, exercise] of Object.entries(latestExercises)) {
+    if (exercise) {
+      exercises[key] = (exercise as RecordedExercise).toJSON();
+    }
+  }
+  const cache: LatestExercisesCache = {
+    version: 1,
+    sessionCount: await getSessionCount(db),
+    exercises,
+  };
+  await keyValueStore.setItem(
+    latestExercisesCacheStorageKey,
+    JSON.stringify(cache),
   );
 }
