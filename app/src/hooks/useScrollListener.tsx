@@ -1,10 +1,13 @@
 import { useAppTheme } from '@/hooks/useAppTheme';
 import {
   createContext,
+  useCallback,
   useContext,
   useState,
   ReactNode,
   useEffect,
+  useMemo,
+  useRef,
 } from 'react';
 import {
   Animated,
@@ -20,11 +23,13 @@ type ScrollContextValues = {
   handleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 };
 
+const noopScrollHandler = (_event: NativeSyntheticEvent<NativeScrollEvent>) => {};
+
 // Create a context with default value
 const ScrollContext = createContext<ScrollContextValues>({
   isScrolled: false,
   setScrolled: (_: boolean) => {},
-  handleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {},
+  handleScroll: noopScrollHandler,
 });
 
 type ScrollProviderCallbackProps =
@@ -41,49 +46,51 @@ type ScrollProviderProps = {
   children: ReactNode;
 } & ScrollProviderCallbackProps;
 
-// Create a provider component
 export const ScrollProvider = ({
   children,
   isScrolled: isScrolledOverride,
   setScrolled: setScrolledOverride,
 }: ScrollProviderProps) => {
   const [isScrolledGlobal, setScrolledGlobal] = useState(false);
-
-  return (
-    <ScrollContext.Provider
-      value={{
-        isScrolled: isScrolledOverride ?? isScrolledGlobal,
-        setScrolled: setScrolledOverride ?? setScrolledGlobal,
-        handleScroll: () => {},
-      }}
-    >
-      {children}
-    </ScrollContext.Provider>
+  const value = useMemo<ScrollContextValues>(
+    () => ({
+      isScrolled: isScrolledOverride ?? isScrolledGlobal,
+      setScrolled: setScrolledOverride ?? setScrolledGlobal,
+      handleScroll: noopScrollHandler,
+    }),
+    [isScrolledGlobal, isScrolledOverride, setScrolledOverride],
   );
+
+  return <ScrollContext.Provider value={value}>{children}</ScrollContext.Provider>;
 };
 
-// Create a hook to use the ScrollContext
 export const useScroll = (invertedScroll?: boolean): ScrollContextValues => {
   const ctx = useContext(ScrollContext);
-  const [scrollHandlerLastFired, setScrollHandlerLastFired] = useState<
-    boolean | undefined
-  >(undefined);
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const contentHeight = event.nativeEvent.contentSize.height;
-    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
-    const scrollHeight = contentHeight - layoutHeight;
-    const isScrolled = invertedScroll ? offsetY < scrollHeight : offsetY > 0;
-    if (scrollHandlerLastFired === isScrolled) {
-      return;
-    }
-    setScrollHandlerLastFired(isScrolled);
-    ctx.setScrolled(isScrolled);
-  };
-  return {
-    ...ctx,
-    handleScroll,
-  };
+  const scrollHandlerLastFired = useRef<boolean | undefined>(undefined);
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetY = event.nativeEvent.contentOffset.y;
+      const contentHeight = event.nativeEvent.contentSize.height;
+      const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+      const scrollHeight = contentHeight - layoutHeight;
+      const isScrolled = invertedScroll ? offsetY < scrollHeight : offsetY > 0;
+      if (scrollHandlerLastFired.current === isScrolled) {
+        return;
+      }
+      scrollHandlerLastFired.current = isScrolled;
+      ctx.setScrolled(isScrolled);
+    },
+    [ctx, invertedScroll],
+  );
+
+  return useMemo(
+    () => ({
+      ...ctx,
+      handleScroll,
+    }),
+    [ctx, handleScroll],
+  );
 };
 
 export const useScrollHeaderColor = (): ColorValue => {
@@ -99,7 +106,6 @@ export const useScrollHeaderColor = (): ColorValue => {
     }).start();
   }, [isScrolled, scrollColor]);
 
-  // Interpolate background color
   const backgroundColor = scrollColor.interpolate({
     inputRange: [0, 1],
     outputRange: [colors.surface, colors.surfaceContainer],
