@@ -1,15 +1,21 @@
 import { setOverallViewTime, setStatsIsDirty } from './index';
-import { LocalDate } from '@js-joda/core';
 import { fetchOverallStats, setOverallStats } from './index';
 import { AddEffectFn } from '@/store/store';
-import { selectSessionsBy } from '@/store/stored-sessions';
-
+import {
+  addStoredSession,
+  deleteStoredSession,
+  upsertStoredSessions,
+} from '@/store/stored-sessions';
 import { RemoteData } from '@/models/remote';
 import { selectPreferredWeightUnit } from '../settings';
 import { calculateStats } from '@/store/stats/calculate-stats';
+import { sessionsSchema } from '@/db/schema';
+import { sql } from 'drizzle-orm';
+import { Session } from '@/models/session-models';
+import { toLocalDateJSON } from '@/models/storage/versions/latest';
 
 export function applyStatsEffects(addEffect: AddEffectFn) {
-  addEffect(fetchOverallStats, async (_, { getState, dispatch }) => {
+  addEffect(fetchOverallStats, async (_, { getState, dispatch, extra: { db } }) => {
     const state = getState();
 
     if (
@@ -22,21 +28,44 @@ export function applyStatsEffects(addEffect: AddEffectFn) {
 
     dispatch(setOverallStats(RemoteData.loading()));
     try {
-      let timeframe = state.stats.overallViewTime;
-      if (timeframe === 'all-time') {
-        if (!state.storedSessions.earliestSession) {
-          dispatch(setOverallStats(RemoteData.error('No sessions')));
-          return;
-        }
-        timeframe = {
-          from: state.storedSessions.earliestSession.date,
-          to: LocalDate.now(),
-        };
+      const timeframe = state.stats.overallViewTime;
+      const rows =
+        timeframe === 'all-time'
+          ? await db.select().from(sessionsSchema)
+          : await db
+              .select()
+              .from(sessionsSchema)
+              .where(
+                sql`json_extract(${sessionsSchema.payload}, '$.date') >= ${toLocalDateJSON(timeframe.from)} AND json_extract(${sessionsSchema.payload}, '$.date') <= ${toLocalDateJSON(timeframe.to)}`,
+              );
+
+      if (!rows.length) {
+        dispatch(setOverallStats(RemoteData.error('No sessions')));
+        dispatch(setStatsIsDirty(false));
+        return;
       }
+
+      const sessions = rows.map((row) => Session.fromJSON(row.payload));
+      const effectiveTimeframe =
+        timeframe === 'all-time'
+          ? {
+              from: sessions.reduce(
+                (earliest, session) =>
+                  session.date.isBefore(earliest) ? session.date : earliest,
+                sessions[0]!.date,
+              ),
+              to: sessions.reduce(
+                (latest, session) =>
+                  session.date.isAfter(latest) ? session.date : latest,
+                sessions[0]!.date,
+              ),
+            }
+          : timeframe;
+
       const stats = calculateStats(
-        selectSessionsBy(state, timeframe.from, timeframe.to),
+        sessions,
         selectPreferredWeightUnit(state),
-        timeframe,
+        effectiveTimeframe,
       );
       dispatch(setOverallStats(RemoteData.success(stats)));
       dispatch(setStatsIsDirty(false));
@@ -49,4 +78,13 @@ export function applyStatsEffects(addEffect: AddEffectFn) {
     dispatch(setStatsIsDirty(true));
     dispatch(fetchOverallStats());
   });
+
+  // Completing/editing/deleting a workout invalidates cached statistics, but
+  // recalculation remains lazy until Progress is actually opened.
+  addEffect(
+    [addStoredSession, deleteStoredSession, upsertStoredSessions],
+    async (_, { dispatch }) => {
+      dispatch(setStatsIsDirty(true));
+    },
+  );
 }
