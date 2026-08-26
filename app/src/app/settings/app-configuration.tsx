@@ -8,7 +8,6 @@ import {
   setKeepScreenAwakeDuringWorkout,
   setNotesExpandedByDefault,
   setShowBodyweight,
-  setShowFeed,
   setShowPostWorkoutSummary,
   setShowTips,
   setTrueBlackDarkTheme,
@@ -39,12 +38,6 @@ export default function AppConfiguration() {
           onValueChange={(value) => dispatch(setShowBodyweight(value))}
         />
         <ListSwitch
-          headline={<T keyName="feed.show_feed.label" />}
-          supportingText={<T keyName="feed.show_feed.subtitle" />}
-          value={settings.showFeed}
-          onValueChange={(value) => dispatch(setShowFeed(value))}
-        />
-        <ListSwitch
           headline={<T keyName="workout.show_post_workout_summary.label" />}
           supportingText={
             <T keyName="workout.show_post_workout_summary.subtitle" />
@@ -52,7 +45,6 @@ export default function AppConfiguration() {
           value={settings.showPostWorkoutSummary}
           onValueChange={(value) => dispatch(setShowPostWorkoutSummary(value))}
         />
-
         <ListSwitch
           headline={<T keyName="workout.notes_expanded_by_default.label" />}
           supportingText={
@@ -75,7 +67,6 @@ export default function AppConfiguration() {
           value={settings.showTips}
           onValueChange={(value) => dispatch(setShowTips(value))}
         />
-
         <ThemeChooser
           seed={settings.colorSchemeSeed}
           onUpdateTheme={(x) => dispatch(setColorSchemeSeed(x))}
