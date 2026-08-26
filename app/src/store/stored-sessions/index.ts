@@ -13,9 +13,7 @@ import {
   PayloadAction,
   WritableDraft,
 } from '@reduxjs/toolkit';
-import Enumerable from 'linq';
 import { WeightUnit } from '@/models/weight';
-import { TemporalComparer } from '@/models/comparers';
 import { ExerciseDescriptor } from '@/models/exercise-models';
 
 export interface WeightMigrateableExercise {
@@ -52,22 +50,34 @@ const storedSessionsSlice = createSlice({
     },
     setStoredSessions(state, action: PayloadAction<Record<string, Session>>) {
       state.sessions = action.payload;
-      state.latestExercises = {};
-      Object.values(action.payload).forEach((session) => {
-        updateDerivatives(state, session);
-      });
+      rebuildDerivatives(state);
     },
 
     upsertStoredSessions(state, action: PayloadAction<Session[]>) {
+      let replacesExistingSession = false;
       action.payload.forEach((session) => {
+        replacesExistingSession ||= state.sessions[session.id] !== undefined;
         state.sessions[session.id] = session;
-        updateDerivatives(state, session);
       });
+
+      if (replacesExistingSession) {
+        // A replacement can remove exercises or move timestamps backwards, so
+        // incrementally applying only the new value can leave stale derivatives.
+        rebuildDerivatives(state);
+      } else {
+        action.payload.forEach((session) => updateDerivatives(state, session));
+      }
     },
 
     addStoredSession(state, action: PayloadAction<Session>) {
+      const replacesExistingSession =
+        state.sessions[action.payload.id] !== undefined;
       state.sessions[action.payload.id] = action.payload;
-      updateDerivatives(state, action.payload);
+      if (replacesExistingSession) {
+        rebuildDerivatives(state);
+      } else {
+        updateDerivatives(state, action.payload);
+      }
     },
 
     deleteStoredSession(state, action: PayloadAction<string>) {
@@ -76,23 +86,10 @@ const storedSessionsSlice = createSlice({
 
       if (!deletedSession) return;
 
-      // Collect the exercise keys that were in the deleted session
-      const affectedKeys = new Set(
-        deletedSession.recordedExercises.map((e) =>
-          KeyedExerciseBlueprint.fromExerciseBlueprint(
-            e.blueprint as ExerciseBlueprint,
-          ).toString(),
-        ),
-      );
-
-      // For each affected key, clear and recalculate from remaining sessions
-      affectedKeys.forEach((key) => {
-        delete state.latestExercises[key];
-      });
-
-      Object.values(state.sessions).forEach((session) => {
-        updateDerivatives(state, session as Session);
-      });
+      // Rebuild once so earliestSession and latestExercises can never retain a
+      // reference to the deleted session. The previous implementation only
+      // cleared some exercise keys and never reset earliestSession.
+      rebuildDerivatives(state);
     },
     updateExercise(
       state,
@@ -130,16 +127,7 @@ const storedSessionsSlice = createSlice({
   },
 
   selectors: {
-    selectLatestExercises: createSelector(
-      [(state: StoredSessionState) => state.latestExercises],
-      (exercises) =>
-        Object.fromEntries(
-          Object.entries(exercises).map(([key, exercise]) => [
-            key,
-            exercise ? exercise : undefined,
-          ]),
-        ),
-    ),
+    selectLatestExercises: (state: StoredSessionState) => state.latestExercises,
     selectSessions: createSelector(
       [(state: StoredSessionState) => state.sessions],
       (sessions) => Object.values(sessions),
@@ -153,12 +141,15 @@ const storedSessionsSlice = createSlice({
         (state: StoredSessionState) => state.sessions,
         (_, since: LocalDate) => since,
       ],
-      (sessions, since) =>
-        Enumerable.from(Object.values(sessions))
-          .where((x) => x.date.isAfter(since) || x.date.isEqual(since))
-          .select((x) => x.blueprint.name)
-          .distinct()
-          .toArray(),
+      (sessions, since) => {
+        const names = new Set<string>();
+        for (const session of Object.values(sessions)) {
+          if (session.date.isAfter(since) || session.date.isEqual(since)) {
+            names.add(session.blueprint.name);
+          }
+        }
+        return [...names];
+      },
     ),
 
     selectExercises: (state: StoredSessionState) => state.savedExercises,
@@ -174,6 +165,14 @@ const storedSessionsSlice = createSlice({
       Object.keys(state.savedExercises),
   },
 });
+
+function rebuildDerivatives(state: WritableDraft<StoredSessionState>) {
+  state.latestExercises = {};
+  state.earliestSession = undefined;
+  for (const session of Object.values(state.sessions)) {
+    updateDerivatives(state, session as Session);
+  }
+}
 
 function updateDerivatives(
   state: WritableDraft<StoredSessionState>,
@@ -208,7 +207,7 @@ export const selectSessionsBy = createSelector(
     (_, __, maxDate: LocalDate) => maxDate,
   ],
   (sessions, minDate, maxDate) =>
-    Object.values(sessions).filter(
+    sessions.filter(
       (x) =>
         (x.date.isAfter(minDate) || x.date.isEqual(minDate)) &&
         (x.date.isBefore(maxDate) || x.date.isEqual(maxDate)),
@@ -255,19 +254,35 @@ const selectLatestOrderedRecordedExercises = createSelector(
     sessions,
     maxRecordsPerExercise,
   ): Record<NormalizedNameKey, RecordedExercise[]> => {
-    return Enumerable.from(sessions)
-      .selectMany((x) => x.recordedExercises.filter((x) => x.isStarted))
-      .groupBy((x) =>
-        NormalizedName.fromExerciseBlueprint(x.blueprint).toString(),
-      )
-      .toObject(
-        (x) => x.key(),
-        (x) =>
-          x
-            .orderByDescending((x) => x.latestTime, TemporalComparer)
-            .take(maxRecordsPerExercise)
-            .toArray(),
+    const grouped = new Map<NormalizedNameKey, RecordedExercise[]>();
+
+    for (const session of sessions) {
+      for (const exercise of session.recordedExercises) {
+        if (!exercise.isStarted) {
+          continue;
+        }
+        const key = NormalizedName.fromExerciseBlueprint(
+          exercise.blueprint,
+        ).toString();
+        const group = grouped.get(key);
+        if (group) {
+          group.push(exercise);
+        } else {
+          grouped.set(key, [exercise]);
+        }
+      }
+    }
+
+    const result: Record<NormalizedNameKey, RecordedExercise[]> = {};
+    for (const [key, exercises] of grouped) {
+      exercises.sort((a, b) =>
+        (b.latestTime ?? OffsetDateTime.MIN).compareTo(
+          a.latestTime ?? OffsetDateTime.MIN,
+        ),
       );
+      result[key] = exercises.slice(0, maxRecordsPerExercise);
+    }
+    return result;
   },
 );
 
@@ -287,44 +302,52 @@ export const selectPreviousComparableSession = createSelector(
       return undefined;
     }
 
-    const sessionReferenceTime = getSessionReferenceTime(session);
-    const previousSessions = Enumerable.from(sessions)
-      .where((storedSession) => storedSession.id !== session.id)
-      .where(
-        (storedSession) =>
-          getSessionReferenceTime(storedSession).toEpochSecond() <
-          sessionReferenceTime.toEpochSecond(),
-      )
-      .orderByDescending(
-        (storedSession) => getSessionReferenceTime(storedSession),
-        TemporalComparer,
-      );
+    const referenceEpochSecond = getSessionReferenceTime(session).toEpochSecond();
+    let bestSession: Session | undefined;
+    let bestEpochSecond = Number.NEGATIVE_INFINITY;
 
-    return previousSessions.firstOrDefault(
-      (storedSession) =>
-        storedSession.blueprint.name === session.blueprint.name,
-    );
+    for (const storedSession of sessions) {
+      if (
+        storedSession.id === session.id ||
+        storedSession.blueprint.name !== session.blueprint.name
+      ) {
+        continue;
+      }
+      const candidateEpochSecond =
+        getSessionReferenceTime(storedSession).toEpochSecond();
+      if (
+        candidateEpochSecond < referenceEpochSecond &&
+        candidateEpochSecond > bestEpochSecond
+      ) {
+        bestSession = storedSession;
+        bestEpochSecond = candidateEpochSecond;
+      }
+    }
+    return bestSession;
   },
 );
 
 export const selectSessionsInMonth = createSelector(
   [selectSessions, (_, ym: YearMonth) => ym],
   (sessions, ym) =>
-    Enumerable.from(sessions)
-      .where(
+    sessions
+      .filter(
         (x) => x.date.year() === ym.year() && x.date.month().equals(ym.month()),
       )
-      .orderByDescending((x) => getSessionReferenceTime(x), TemporalComparer)
-      .toArray(),
+      .sort((a, b) =>
+        getSessionReferenceTime(b).compareTo(getSessionReferenceTime(a)),
+      ),
 );
 
-export const selectMuscles = createSelector([selectExercises], (exercises) =>
-  Enumerable.from(Object.entries(exercises))
-    .selectMany(([, x]) => x.muscles)
-    .distinct()
-    .orderBy((x) => x)
-    .toArray(),
-);
+export const selectMuscles = createSelector([selectExercises], (exercises) => {
+  const muscles = new Set<string>();
+  for (const exercise of Object.values(exercises)) {
+    for (const muscle of exercise.muscles) {
+      muscles.add(muscle);
+    }
+  }
+  return [...muscles].sort();
+});
 
 export const selectExerciseIds = createSelector(
   [selectExercises],
