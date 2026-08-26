@@ -5,7 +5,6 @@ import {
   fromDistanceJSON,
   toDistanceJSON,
 } from '@/models/blueprint-models';
-import { TemporalComparer } from '@/models/comparers';
 import { RecordedExercise } from '@/models/session-models/recorded-exercise';
 import {
   RecordedCardioExerciseJSON,
@@ -219,19 +218,25 @@ export class RecordedCardioExercise {
   }
 
   get latestTime(): OffsetDateTime | undefined {
-    return this.sets
-      .map((x) => x.completionDateTime)
-      .filter((x) => x)
-      .sort(TemporalComparer)
-      .at(-1);
+    let latest: OffsetDateTime | undefined;
+    for (const set of this.sets) {
+      const time = set.completionDateTime;
+      if (time && (!latest || time.isAfter(latest))) {
+        latest = time;
+      }
+    }
+    return latest;
   }
 
   get earliestTime(): OffsetDateTime | undefined {
-    return this.sets
-      .map((x) => x.completionDateTime)
-      .filter((x) => x)
-      .sort(TemporalComparer)
-      .at(0);
+    let earliest: OffsetDateTime | undefined;
+    for (const set of this.sets) {
+      const time = set.completionDateTime;
+      if (time && (!earliest || time.isBefore(earliest))) {
+        earliest = time;
+      }
+    }
+    return earliest;
   }
 
   withNothingCompleted(): RecordedCardioExercise {
