@@ -3,6 +3,13 @@ name: Build BackupServer
 on:
   push:
     branches-ignore: [main]
+    paths:
+      - examples/remote-backup/reference-server-implementation/**
+      - .github/workflows/backupserver-build.yml
+
+concurrency:
+  group: backupserver-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
