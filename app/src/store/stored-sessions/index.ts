@@ -22,7 +22,10 @@ export interface WeightMigrateableExercise {
 }
 
 interface StoredSessionState {
+  // Core exercise/progression state is ready. This intentionally does not mean
+  // that the entire workout history has been materialized in Redux.
   isHydrated: boolean;
+  isHistoryHydrated: boolean;
   sessions: Record<string, Session>;
   latestExercises: Record<string, RecordedExercise | undefined>; // KeyedExerciseBlueprint -> RecordedExercise
   savedExercises: Record<string, ExerciseDescriptor>;
@@ -33,6 +36,7 @@ interface StoredSessionState {
 
 const initialState: StoredSessionState = {
   isHydrated: false,
+  isHistoryHydrated: false,
   sessions: {},
   latestExercises: {},
   savedExercises: {},
@@ -48,8 +52,15 @@ const storedSessionsSlice = createSlice({
     setIsHydrated(state, action: PayloadAction<boolean>) {
       state.isHydrated = action.payload;
     },
+    setLatestExercises(
+      state,
+      action: PayloadAction<Record<string, RecordedExercise | undefined>>,
+    ) {
+      state.latestExercises = action.payload;
+    },
     setStoredSessions(state, action: PayloadAction<Record<string, Session>>) {
       state.sessions = action.payload;
+      state.isHistoryHydrated = true;
       rebuildDerivatives(state);
     },
 
@@ -60,7 +71,7 @@ const storedSessionsSlice = createSlice({
         state.sessions[session.id] = session;
       });
 
-      if (replacesExistingSession) {
+      if (replacesExistingSession && state.isHistoryHydrated) {
         // A replacement can remove exercises or move timestamps backwards, so
         // incrementally applying only the new value can leave stale derivatives.
         rebuildDerivatives(state);
@@ -73,7 +84,7 @@ const storedSessionsSlice = createSlice({
       const replacesExistingSession =
         state.sessions[action.payload.id] !== undefined;
       state.sessions[action.payload.id] = action.payload;
-      if (replacesExistingSession) {
+      if (replacesExistingSession && state.isHistoryHydrated) {
         rebuildDerivatives(state);
       } else {
         updateDerivatives(state, action.payload);
@@ -86,10 +97,11 @@ const storedSessionsSlice = createSlice({
 
       if (!deletedSession) return;
 
-      // Rebuild once so earliestSession and latestExercises can never retain a
-      // reference to the deleted session. The previous implementation only
-      // cleared some exercise keys and never reset earliestSession.
-      rebuildDerivatives(state);
+      // History deletion only happens after history hydration. Rebuilding once
+      // keeps earliestSession/latestExercises exact after removing a latest set.
+      if (state.isHistoryHydrated) {
+        rebuildDerivatives(state);
+      }
     },
     updateExercise(
       state,
@@ -128,6 +140,8 @@ const storedSessionsSlice = createSlice({
 
   selectors: {
     selectLatestExercises: (state: StoredSessionState) => state.latestExercises,
+    selectIsHistoryHydrated: (state: StoredSessionState) =>
+      state.isHistoryHydrated,
     selectSessions: createSelector(
       [(state: StoredSessionState) => state.sessions],
       (sessions) => Object.values(sessions),
@@ -217,6 +231,7 @@ export const selectSessionsBy = createSelector(
 export const initializeStoredSessionsStateSlice = createAction(
   'initializeStoredSessionsStateSlice',
 );
+export const ensureHistoryHydrated = createAction('ensureHistoryHydrated');
 
 export const migrateExerciseWeights = createAction('migrateExerciseWeights');
 export const checkIfWeightMigrationRequired = createAction(
@@ -225,6 +240,7 @@ export const checkIfWeightMigrationRequired = createAction(
 
 export const {
   setIsHydrated,
+  setLatestExercises,
   setStoredSessions,
   upsertStoredSessions,
   addStoredSession,
@@ -242,6 +258,7 @@ export const {
   selectSession,
   selectExercises,
   selectLatestExercises,
+  selectIsHistoryHydrated,
   selectExerciseById,
 } = storedSessionsSlice.selectors;
 
