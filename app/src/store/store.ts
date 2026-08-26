@@ -14,6 +14,7 @@ import feedReducer from './feed';
 import { storedSessionsReducer } from './stored-sessions';
 import { sessionEditorReducer } from './session-editor';
 import { statsReducer } from '@/store/stats';
+import { historyViewReducer } from '@/store/history-view';
 import { resolveServices, Services } from '@/services';
 import { aiPlannerReducer } from '@/store/ai-planner';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
@@ -40,6 +41,7 @@ export function createStore(db: ExpoSQLiteDatabase, expoDb: SQLiteDatabase) {
       app: appReducer,
       sessionEditor: sessionEditorReducer,
       storedSessions: storedSessionsReducer,
+      historyView: historyViewReducer,
       stats: statsReducer,
     }),
   });
