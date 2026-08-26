@@ -9,6 +9,7 @@ import { initializeAppStateSlice } from '@/store/app';
 import { useCallback, useMemo, useRef } from 'react';
 import { applySettingsEffects } from '@/store/settings/effects';
 import { applyStoredSessionsEffects } from '@/store/stored-sessions/effects';
+import { applyHistoryViewEffects } from '@/store/history-view/effects';
 import { applyFeedEffects } from '@/store/feed/effects';
 import { applyStatsEffects } from '@/store/stats/effects';
 import { applyAiPlannerEffects } from '@/store/ai-planner/effects';
@@ -27,6 +28,7 @@ export function resolveStore(db: ExpoSQLiteDatabase, expoDb: SQLiteDatabase) {
   applyAppEffects(addEffect);
   applySettingsEffects(addEffect);
   applyStoredSessionsEffects(addEffect);
+  applyHistoryViewEffects(addEffect);
   applyFeedEffects(addEffect);
   applyStatsEffects(addEffect);
   applyAiPlannerEffects(addEffect);
