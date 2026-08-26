@@ -1,14 +1,18 @@
+/* eslint-disable no-restricted-imports -- set logging intentionally bypasses the RNGH wrapper to keep the hot-path press native */
 import { PotentialSet, WeightAppliesTo } from '@/models/session-models';
 import BigNumber from 'bignumber.js';
 import { useEffect, useState } from 'react';
-import { Text as PaperText, Chip } from 'react-native-paper';
+import {
+  Text as PaperText,
+  Chip,
+  TouchableRipple as PaperTouchableRipple,
+} from 'react-native-paper';
 import { Keyboard, Text, View } from 'react-native';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
 import WeightDialog from '@/components/presentation/foundation/editors/weight-dialog';
 import { useAppTheme, spacing, font, rounding } from '@/hooks/useAppTheme';
 import FocusRing from '@/components/presentation/foundation/focus-ring';
 import { T } from '@tolgee/react';
-import TouchableRipple from '@/components/presentation/foundation/gesture-wrappers/touchable-ripple';
 import { Weight } from '@/models/weight';
 import PotentialSetAdditionalActionsDialog from '@/components/presentation/workout/weighted/potential-sets-addition-actions-dialog';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
@@ -58,7 +62,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
             overflow: 'hidden',
           }}
         >
-          <TouchableRipple
+          <PaperTouchableRipple
             style={{
               flexShrink: 0,
               padding: 0,
@@ -74,6 +78,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
             onLongPress={
               props.isReadonly ? undefined : () => setIsRepsDialogOpen(true)
             }
+            delayLongPress={500}
             disabled={props.isReadonly}
             testID="repcount"
           >
@@ -123,7 +128,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
                   </View>
                 )}
             </View>
-          </TouchableRipple>
+          </PaperTouchableRipple>
         </View>
         <View
           style={{
@@ -137,7 +142,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
             width: '100%',
           }}
         >
-          <TouchableRipple
+          <PaperTouchableRipple
             testID="repcount-weight"
             style={{
               alignItems: 'center',
@@ -157,7 +162,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
             <Text style={{ color: colors.onSurface, ...font['text-sm'] }}>
               <WeightFormat weight={props.set.weight} />
             </Text>
-          </TouchableRipple>
+          </PaperTouchableRipple>
         </View>
         <WeightDialog
           open={isWeightDialogOpen}
