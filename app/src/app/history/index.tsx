@@ -21,16 +21,18 @@ import {
 import { addUnpublishedSessionId, encryptAndShare } from '@/store/feed';
 import {
   deleteStoredSession,
+  ensureHistoryHydrated,
+  selectIsHistoryHydrated,
   selectSessions,
   selectSessionsInMonth,
 } from '@/store/stored-sessions';
 import { uuid } from '@/utils/uuid';
 import { LocalDate, YearMonth } from '@js-joda/core';
 import { useTranslate } from '@tolgee/react';
-import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Card, Menu, Text } from 'react-native-paper';
+import { ActivityIndicator, Card, Menu, Text } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { useDispatch } from 'react-redux';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -42,6 +44,7 @@ export default function History() {
   const dispatch = useDispatch();
   const formatDate = useFormatDate();
   const [currentYearMonth, setCurrentYearMonth] = useState(YearMonth.now());
+  const historyHydrated = useAppSelector(selectIsHistoryHydrated);
   const latesBodyweight = useAppSelector((x) =>
     x.program.upcomingSessions
       .map((x) => x.at(0)?.bodyweight)
@@ -56,6 +59,14 @@ export default function History() {
   const currentWorkoutSession = useAppSelectorWithArg(
     selectCurrentSession,
     'workoutSession',
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!historyHydrated) {
+        dispatch(ensureHistoryHydrated());
+      }
+    }, [dispatch, historyHydrated]),
   );
 
   const onSelectSession = (session: Session) => {
@@ -138,81 +149,89 @@ export default function History() {
           title={t('generic.history.title')}
           subtitle={t('screen.history.subtitle')}
         />
-        <HistoryCalendarCard
-          currentYearMonth={currentYearMonth}
-          sessions={sessions}
-          onDateSelect={createSessionAtDate}
-          onMonthChange={setCurrentYearMonth}
-          onDeleteSession={deleteWorkout}
-          onSessionSelect={onSelectSession}
-        />
-        <SectionHeading
-          title={t('workout.sessions_in_month.title')}
-          detail={`${sessionsInMonth.length}`}
-        />
-        <CardList
-          testID="history-list"
-          items={sessionsInMonth}
-          cardType="contained"
-          onPress={onSelectSession}
-          renderItemContent={(session) => (
-            <Card.Content>
-              <SessionSummaryTitle isFilled session={session} />
-              <View style={styles.exercisePreview}>
-                {session.recordedExercises
-                  .slice(0, 3)
-                  .map((exercise, index) => (
-                    <View
-                      key={`${exercise.blueprint.name}-${index}`}
-                      style={styles.exerciseRow}
-                    >
-                      <Text
-                        variant="labelMedium"
-                        style={[
-                          styles.exerciseIndex,
-                          { color: colors.primary },
-                        ]}
-                      >
-                        {(index + 1).toString().padStart(2, '0')}
-                      </Text>
-                      <Text
-                        variant="bodyMedium"
-                        numberOfLines={1}
-                        style={{ flex: 1 }}
-                      >
-                        {exercise.blueprint.name}
-                      </Text>
-                    </View>
-                  ))}
-                {session.recordedExercises.length > 3 ? (
-                  <HistoryMoreCount
-                    count={session.recordedExercises.length - 3}
-                  />
-                ) : null}
-              </View>
-            </Card.Content>
-          )}
-          renderItemActions={(session) => (
-            <HistorySessionActions
-              session={session}
-              onRepeat={() => startWorkout(session)}
-              onEdit={() => onSelectSession(session)}
-              onShare={() => handleSharePress(session)}
-              onDelete={() => deleteWorkout(session)}
+        {!historyHydrated ? (
+          <View style={styles.loadingHistory}>
+            <ActivityIndicator />
+          </View>
+        ) : (
+          <>
+            <HistoryCalendarCard
+              currentYearMonth={currentYearMonth}
+              sessions={sessions}
+              onDateSelect={createSessionAtDate}
+              onMonthChange={setCurrentYearMonth}
+              onDeleteSession={deleteWorkout}
+              onSessionSelect={onSelectSession}
             />
-          )}
-          emptyTemplate={
-            <EmptyInfo>
-              <LimitedHtml
-                value={t('workout.no_sessions_in_month.message', {
-                  month: formatDate(currentYearMonth.atDay(1), {
-                    month: 'long',
-                  }),
-                })}
-              />
-            </EmptyInfo>
-          }
-        />
+            <SectionHeading
+              title={t('workout.sessions_in_month.title')}
+              detail={`${sessionsInMonth.length}`}
+            />
+            <CardList
+              testID="history-list"
+              items={sessionsInMonth}
+              cardType="contained"
+              onPress={onSelectSession}
+              renderItemContent={(session) => (
+                <Card.Content>
+                  <SessionSummaryTitle isFilled session={session} />
+                  <View style={styles.exercisePreview}>
+                    {session.recordedExercises
+                      .slice(0, 3)
+                      .map((exercise, index) => (
+                        <View
+                          key={`${exercise.blueprint.name}-${index}`}
+                          style={styles.exerciseRow}
+                        >
+                          <Text
+                            variant="labelMedium"
+                            style={[
+                              styles.exerciseIndex,
+                              { color: colors.primary },
+                            ]}
+                          >
+                            {(index + 1).toString().padStart(2, '0')}
+                          </Text>
+                          <Text
+                            variant="bodyMedium"
+                            numberOfLines={1}
+                            style={{ flex: 1 }}
+                          >
+                            {exercise.blueprint.name}
+                          </Text>
+                        </View>
+                      ))}
+                    {session.recordedExercises.length > 3 ? (
+                      <HistoryMoreCount
+                        count={session.recordedExercises.length - 3}
+                      />
+                    ) : null}
+                  </View>
+                </Card.Content>
+              )}
+              renderItemActions={(session) => (
+                <HistorySessionActions
+                  session={session}
+                  onRepeat={() => startWorkout(session)}
+                  onEdit={() => onSelectSession(session)}
+                  onShare={() => handleSharePress(session)}
+                  onDelete={() => deleteWorkout(session)}
+                />
+              )}
+              emptyTemplate={
+                <EmptyInfo>
+                  <LimitedHtml
+                    value={t('workout.no_sessions_in_month.message', {
+                      month: formatDate(currentYearMonth.atDay(1), {
+                        month: 'long',
+                      }),
+                    })}
+                  />
+                </EmptyInfo>
+              }
+            />
+          </>
+        )}
       </FullHeightScrollView>
 
       <ConfirmationDialog
@@ -290,6 +309,7 @@ function HistorySessionActions({
         }
       >
         <Menu.Item
+          testID="history-edit-workout"
           leadingIcon="edit"
           title={t('workout.edit.button')}
           onPress={() => {
@@ -332,6 +352,11 @@ function HistoryMoreCount({ count }: { count: number }) {
 }
 
 const styles = StyleSheet.create({
+  loadingHistory: {
+    minHeight: 320,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   exercisePreview: {
     gap: spacing[2],
     marginTop: spacing[4],
