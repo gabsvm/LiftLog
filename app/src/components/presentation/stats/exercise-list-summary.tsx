@@ -1,10 +1,11 @@
 import AppBottomSheet from '@/components/presentation/foundation/app-bottom-sheet';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import EmptyInfo from '@/components/presentation/foundation/empty-info';
 import { SegmentedList } from '@/components/presentation/foundation/segmented-list';
 import { TitledSection } from '@/components/presentation/stats/titled-section';
 import { WeightedExerciseListSearcher } from '@/components/presentation/stats/weighted-exercise-list-searcher';
 import { WeightedExerciseStatSummary } from '@/components/presentation/stats/weighted-exercise-stat-summary';
-import { useAppTheme } from '@/hooks/useAppTheme';
+import { useAppTheme, spacing } from '@/hooks/useAppTheme';
 import {
   GranularStatisticView,
   WeightedExerciseStatistics,
@@ -26,36 +27,47 @@ export function ExerciseListSummary(props: { stats: GranularStatisticView }) {
   )
     .take(5)
     .toArray();
+  const hasExerciseStats = props.stats.weightedExerciseStats.length > 0;
+
   const onItemPress = (item: WeightedExerciseStatistics) => {
     setSheetOpen(false);
     push(
       `/stats/expanded-weighted-exercise?exerciseName=${encodeURIComponent(item.exerciseName)}`,
     );
   };
+
   return (
     <TitledSection
       title={t('stats.weighted_exercise_list.title')}
       titleRight={
-        <Button
-          mode="text"
-          onPress={() => {
-            setSheetOpen(true);
-          }}
-          style={{ alignSelf: 'flex-end' }}
-        >
-          {t('stats.see_more.button')}
-        </Button>
+        hasExerciseStats ? (
+          <Button
+            mode="text"
+            onPress={() => {
+              setSheetOpen(true);
+            }}
+            style={{ alignSelf: 'flex-end' }}
+          >
+            {t('stats.see_more.button')}
+          </Button>
+        ) : undefined
       }
     >
-      <SegmentedList
-        items={topWeightedExercises}
-        renderItem={(item) => (
-          <WeightedExerciseStatSummary
-            onPress={onItemPress}
-            exerciseStats={item}
-          />
-        )}
-      />
+      {hasExerciseStats ? (
+        <SegmentedList
+          items={topWeightedExercises}
+          renderItem={(item) => (
+            <WeightedExerciseStatSummary
+              onPress={onItemPress}
+              exerciseStats={item}
+            />
+          )}
+        />
+      ) : (
+        <EmptyInfo style={{ paddingVertical: spacing[5] }}>
+          {t('generic.no_data_available.message')}
+        </EmptyInfo>
+      )}
       {sheetOpen ? (
         <AppBottomSheet
           backgroundStyle={{ backgroundColor: colors.surfaceContainerHighest }}
