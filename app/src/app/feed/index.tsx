@@ -7,18 +7,30 @@ import {
   useScrollHeaderColor,
 } from '@/hooks/useScrollListener';
 import { useAppSelector } from '@/store';
-import { selectFollowRequestCount } from '@/store/feed';
+import {
+  initializeFeedStateSlice,
+  selectFollowRequestCount,
+} from '@/store/feed';
 import { useTranslate } from '@tolgee/react';
 import { Stack } from 'expo-router';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Tabs, TabScreen, TabsProvider } from 'react-native-paper-tabs';
+import { useDispatch } from 'react-redux';
 
 export default function FeedIndexPage() {
   const { t } = useTranslate();
+  const dispatch = useDispatch();
+  const feedHydrated = useAppSelector((state) => state.feed.isHydrated);
   const followRequestBadgeCount =
     useAppSelector(selectFollowRequestCount) || undefined;
+
+  useEffect(() => {
+    if (!feedHydrated) {
+      dispatch(initializeFeedStateSlice());
+    }
+  }, [dispatch, feedHydrated]);
 
   const { setScrolled } = useScroll();
   const headerColor = useScrollHeaderColor();
