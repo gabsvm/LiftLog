@@ -12,6 +12,7 @@ import {
 } from '@/store/settings';
 import {
   checkIfWeightMigrationRequired,
+  setStoredSessions,
   upsertStoredSessions,
 } from '@/store/stored-sessions';
 import { streamToUint8Array } from '@/utils/stream';
@@ -91,7 +92,20 @@ export function addImportBackupEffects(addEffect: AddEffectFn) {
 
   addEffect(
     importBackupData,
-    async ({ payload: dao }, { dispatch, extra: { tolgee } }) => {
+    async ({ payload: dao }, { dispatch, extra: { tolgee, db } }) => {
+      // Backup restore is intentionally a rare/full operation. Materialize the
+      // existing DB history once before applying the imported rows so replacements
+      // can rebuild latest/recent exercise derivatives exactly even when normal
+      // app startup kept history lazy.
+      const existingSessions = (await db.select().from(sessionsSchema)).map(
+        (row) => Session.fromJSON(row.payload),
+      );
+      const mergedSessions = Object.fromEntries(
+        existingSessions
+          .concat(dao.workouts)
+          .map((session) => [session.id, session] as const),
+      );
+      dispatch(setStoredSessions(mergedSessions));
       dispatch(upsertStoredSessions(dao.workouts));
       dispatch(upsertSavedPlans(dao.programs));
       dispatch(
@@ -259,17 +273,14 @@ async function unGzipIfZipped(
 
     const writer = stream.writable.getWriter();
     const readable = stream.readable;
-
-    // Start reading from the stream immediately
     const decompressPromise = streamToUint8Array(readable);
-    const chunkSize = 8192; // 8KB chunks
+    const chunkSize = 8192;
     for (let i = 0; i < bytes.length; i += chunkSize) {
       const chunk = bytes.slice(i, i + chunkSize);
       await writer.write(chunk);
     }
     await writer.close();
-    const gunzipped = await decompressPromise;
-    return gunzipped;
+    return await decompressPromise;
   } catch (e) {
     logger.warn('Could not unzip bytes', e);
     return bytes;
