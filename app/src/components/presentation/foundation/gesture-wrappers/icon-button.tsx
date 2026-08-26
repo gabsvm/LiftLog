@@ -1,9 +1,7 @@
 /* eslint-disable no-restricted-imports */
 import { GesturePressableProps } from '@/components/presentation/foundation/gesture-wrappers/pressable-props';
 import { AppIconSource } from '@/components/presentation/foundation/ms-icon-source';
-import { isNotNullOrUndefined } from '@/utils/null';
 import { I18nManager } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   IconButton as NativeIconButton,
   IconButtonProps,
@@ -21,33 +19,20 @@ export default function IconButton({
   style,
   ...rest
 }: GesturePressableProps<ICProps> & { mirrored?: boolean }) {
-  const tap = Gesture.Tap()
-    .runOnJS(true)
-    .onStart(() => !disabled && onPress?.());
-  const longPress = onLongPress
-    ? Gesture.LongPress()
-        .runOnJS(true)
-        .onStart(() => !disabled && onLongPress())
-    : undefined;
-  const gesture = Gesture.Race(
-    ...[tap, longPress].filter(isNotNullOrUndefined),
-  );
   return (
-    <GestureDetector gesture={gesture}>
-      <NativeIconButton
-        disabled={disabled}
-        onPress={onPress ? () => {} : undefined!}
-        onLongPress={onLongPress || onPress ? () => {} : undefined!}
-        style={[
-          style,
-          mirrored
-            ? I18nManager.isRTL
-              ? { transform: [{ scaleX: -1 }] }
-              : {}
-            : {},
-        ]}
-        {...rest}
-      />
-    </GestureDetector>
+    <NativeIconButton
+      disabled={disabled}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={[
+        style,
+        mirrored
+          ? I18nManager.isRTL
+            ? { transform: [{ scaleX: -1 }] }
+            : {}
+          : {},
+      ]}
+      {...rest}
+    />
   );
 }
