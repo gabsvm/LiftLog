@@ -28,9 +28,11 @@ import {
   toExerciseDescriptorJSON,
 } from '@/models/exercise-models';
 
-// We keep track of added builting exerciseIds (which are the exercise name for builtins)
+// We keep track of added builtin exerciseIds (which are the exercise name for builtins)
 // Then we make sure builtins don't get re-added if they are deleted
 const addedBuiltInExerciseIdsStorageKey = 'AddedBuiltInExerciseIdList';
+const POST_STARTUP_MIGRATION_SCAN_DELAY_MS = 350;
+
 export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
   // Dispatched AFTER settings, so we can safely access settings
   addEffect(
@@ -48,6 +50,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       if (!getState().settings.isHydrated) {
         throw new Error('Settings must be hydrated before stored sessions');
       }
+
       await logger.time('initializeStoredSessions', async () => {
         const completedSessions = (
           await db.select().from(sessionsSchema)
@@ -74,8 +77,9 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
         ),
         {},
       );
+      const previouslyAddedIds = new Set(builtinExercisesAddedInThePast);
       const builtInExercisesNotAlreadyAdded = builtInExerciseList
-        .filter((x) => !builtinExercisesAddedInThePast.includes(x.name))
+        .filter((x) => !previouslyAddedIds.has(x.name))
         .reduce(
           (a, b) => {
             a[b.name] = {
@@ -93,29 +97,46 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
           {} as Record<string, ExerciseDescriptor>,
         );
 
+      const newBuiltInEntries = Object.entries(builtInExercisesNotAlreadyAdded);
+      if (newBuiltInEntries.length > 0) {
+        // The old path dispatched one updateExercise per builtin. On a fresh
+        // install that means hundreds of Redux listener runs and SQLite writes.
+        // Seed all missing builtins with one SQLite statement instead.
+        await db
+          .insert(exercisesSchema)
+          .values(
+            newBuiltInEntries.map(([id, exercise]) => ({
+              id,
+              payload: toExerciseDescriptorJSON(exercise),
+            })),
+          )
+          .onConflictDoNothing();
+      }
+
       const currentExercises = Object.entries({
         ...builtInExercisesNotAlreadyAdded,
         ...savedExercises,
       }).sort((a, b) => a[1].name.localeCompare(b[1].name));
-
-      Object.entries(builtInExercisesNotAlreadyAdded).forEach(([id, ex]) => {
-        dispatch(updateExercise({ id, exercise: ex }));
-      });
-
       dispatch(setExercises(Object.fromEntries(currentExercises)));
 
-      const newBuiltIns: string[] = builtinExercisesAddedInThePast.concat(
-        Object.keys(builtInExercisesNotAlreadyAdded),
-      );
-      await keyValueStore.setItem(
-        addedBuiltInExerciseIdsStorageKey,
-        JSON.stringify(newBuiltIns),
-      );
+      if (newBuiltInEntries.length > 0) {
+        const newBuiltIns = builtinExercisesAddedInThePast.concat(
+          newBuiltInEntries.map(([id]) => id),
+        );
+        await keyValueStore.setItem(
+          addedBuiltInExerciseIdsStorageKey,
+          JSON.stringify(newBuiltIns),
+        );
+      }
 
-      dispatch(checkIfWeightMigrationRequired());
-
+      // The nil-weight compatibility scan walks every historic session/set.
+      // It should not block the first usable frame of the application.
       dispatch(setIsHydrated(true));
       dispatch(fetchUpcomingSessions());
+      setTimeout(
+        () => dispatch(checkIfWeightMigrationRequired()),
+        POST_STARTUP_MIGRATION_SCAN_DELAY_MS,
+      );
     },
   );
 
@@ -123,29 +144,31 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     checkIfWeightMigrationRequired,
     (_, { dispatch, stateAfterReduce }) => {
       const completedSessionsList = selectSessions(stateAfterReduce);
+      const migrationsByName = new Map<string, WeightMigrateableExercise>();
 
-      const weightsNeedMigration = Enumerable.from(completedSessionsList)
-        .selectMany((x) =>
-          Enumerable.from(x.recordedExercises)
-            .ofType<RecordedWeightedExercise>(RecordedWeightedExercise)
-            .selectMany((ex) =>
-              Enumerable.from(ex.potentialSets)
-                .where((set) => set.weight.unit === 'nil')
-                .select(() => ex)
-                .take(1),
-            ),
-        )
-        .select(
-          (ex) =>
-            ({
-              name: ex.blueprint.name,
+      // This runs once after startup (and only exists for old nil-unit data), so
+      // use straight loops and stop scanning an exercise as soon as a nil set is
+      // found instead of building several LINQ intermediate enumerables.
+      for (const session of completedSessionsList) {
+        for (const exercise of session.recordedExercises) {
+          if (!(exercise instanceof RecordedWeightedExercise)) continue;
+          if (migrationsByName.has(exercise.blueprint.name)) continue;
+          if (exercise.potentialSets.some((set) => set.weight.unit === 'nil')) {
+            migrationsByName.set(exercise.blueprint.name, {
+              name: exercise.blueprint.name,
               unit: 'nil',
-            }) satisfies WeightMigrateableExercise,
-        )
-        .distinct((x) => x.name)
-        .orderBy((x) => x.name)
-        .toArray();
-      dispatch(setExercisesRequiringWeightMigration(weightsNeedMigration));
+            });
+          }
+        }
+      }
+
+      dispatch(
+        setExercisesRequiringWeightMigration(
+          Array.from(migrationsByName.values()).sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+        ),
+      );
     },
   );
 
@@ -153,8 +176,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     const sessions = selectSessions(stateAfterReduce);
     const migrations =
       stateAfterReduce.storedSessions.exercisesRequiringWeightMigration;
-    const findUnit = (exerciseName: string) =>
-      migrations.find((x) => x.name === exerciseName)?.unit;
+    const migrationUnits = new Map(migrations.map((x) => [x.name, x.unit]));
     const applyWeightToSession = (session: Session) =>
       session.with({
         recordedExercises: session.recordedExercises.map((re) =>
@@ -165,7 +187,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
                     weight: ps.weight.with({
                       unit:
                         ps.weight.unit === 'nil'
-                          ? (findUnit(re.blueprint.name) ?? 'nil')
+                          ? (migrationUnits.get(re.blueprint.name) ?? 'nil')
                           : ps.weight.unit,
                     }),
                   }),
@@ -266,6 +288,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
           id: x.id,
           payload: x.toJSON(),
         }));
+        if (!toUpsert.length) return;
         await db
           .insert(sessionsSchema)
           .values(toUpsert)
@@ -308,12 +331,15 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       }
       await db.transaction(async (tx) => {
         await tx.delete(exercisesSchema);
-        await tx.insert(exercisesSchema).values(
-          Object.entries(action.payload).map(([id, exercise]) => ({
+        const exerciseRows = Object.entries(action.payload).map(
+          ([id, exercise]) => ({
             id,
             payload: toExerciseDescriptorJSON(exercise),
-          })),
+          }),
         );
+        if (exerciseRows.length) {
+          await tx.insert(exercisesSchema).values(exerciseRows);
+        }
       });
     },
   );
