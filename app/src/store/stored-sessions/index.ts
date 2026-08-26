@@ -68,6 +68,12 @@ const storedSessionsSlice = createSlice({
     ) {
       state.recentExercises = action.payload;
     },
+    setProgressionSessions(state, action: PayloadAction<Session[]>) {
+      resetDerivatives(state);
+      for (const session of action.payload) {
+        updateDerivatives(state, session);
+      }
+    },
     setStoredSessions(state, action: PayloadAction<Record<string, Session>>) {
       state.sessions = action.payload;
       state.isHistoryHydrated = true;
@@ -107,8 +113,6 @@ const storedSessionsSlice = createSlice({
 
       if (!deletedSession) return;
 
-      // History deletion only happens after history hydration. Rebuilding once
-      // keeps all progression/history derivatives exact after removing a latest set.
       if (state.isHistoryHydrated) {
         rebuildDerivatives(state);
       }
@@ -191,10 +195,14 @@ const storedSessionsSlice = createSlice({
   },
 });
 
-function rebuildDerivatives(state: WritableDraft<StoredSessionState>) {
+function resetDerivatives(state: WritableDraft<StoredSessionState>) {
   state.latestExercises = {};
   state.recentExercises = {};
   state.earliestSession = undefined;
+}
+
+function rebuildDerivatives(state: WritableDraft<StoredSessionState>) {
+  resetDerivatives(state);
   for (const session of Object.values(state.sessions)) {
     updateDerivatives(state, session as Session);
   }
@@ -270,6 +278,7 @@ export const {
   setIsHydrated,
   setLatestExercises,
   setRecentExercises,
+  setProgressionSessions,
   setStoredSessions,
   upsertStoredSessions,
   addStoredSession,
@@ -293,7 +302,10 @@ export const {
 } = storedSessionsSlice.selectors;
 
 export const selectRecentlyCompletedExercises = createSelector(
-  [selectRecentExercises, (_, maxRecordsPerExercise: number) => maxRecordsPerExercise],
+  [
+    selectRecentExercises,
+    (_, maxRecordsPerExercise: number) => maxRecordsPerExercise,
+  ],
   (recentExercises, maxRecordsPerExercise) =>
     (blueprint: ExerciseBlueprint): RecordedExercise[] =>
       (recentExercises[
