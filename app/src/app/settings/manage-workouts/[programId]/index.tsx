@@ -25,6 +25,7 @@ export default function ManageWorkouts() {
   const program = useAppSelectorWithArg(selectProgram, programId);
   const { t } = useTranslate();
   const dispatch = useDispatch();
+
   const selectSession = (sessionBlueprint: SessionBlueprint, index: number) => {
     dispatch(setEditingSession(sessionBlueprint));
     push(`/settings/manage-workouts/${programId}/manage-session/${index}`);
@@ -39,9 +40,10 @@ export default function ManageWorkouts() {
         programId,
         sessionBlueprint: newSession,
       }),
-      selectSession(newSession, program.sessions.length),
     );
+    selectSession(newSession, program.sessions.length);
   };
+
   const floatingBottomContainer = (
     <FloatingBottomContainer
       fab={
@@ -55,29 +57,32 @@ export default function ManageWorkouts() {
       }
     />
   );
+
   const emptyInfo = program.sessions.length ? undefined : (
     <EmptyInfo>
       <LimitedHtml value={t('workout.no_workouts_in_plan.message')} />
     </EmptyInfo>
   );
+
   return (
     <FullHeightScrollView
       floatingChildren={floatingBottomContainer}
-      scrollStyle={{
-        paddingHorizontal: spacing.pageHorizontalMargin,
+      scrollStyle={{ paddingHorizontal: spacing.pageHorizontalMargin }}
+      contentContainerStyle={{
+        gap: spacing[3],
+        paddingTop: spacing[3],
+        paddingBottom: spacing[8],
       }}
     >
       <Stack.Screen options={{ title: program.name }} />
       <TextInput
         value={program.name}
-        style={{ marginBottom: spacing[2] }}
-        mode="flat"
+        mode="outlined"
         onChangeText={(name) =>
-          dispatch(setSavedPlanName({ programId: programId, name }))
+          dispatch(setSavedPlanName({ programId, name }))
         }
       />
       {emptyInfo}
-
       <CardList
         items={program.sessions}
         cardType="contained"
