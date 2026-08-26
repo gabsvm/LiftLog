@@ -39,7 +39,7 @@ export function applyStatsEffects(addEffect: AddEffectFn) {
                 sql`json_extract(${sessionsSchema.payload}, '$.date') >= ${toLocalDateJSON(timeframe.from)} AND json_extract(${sessionsSchema.payload}, '$.date') <= ${toLocalDateJSON(timeframe.to)}`,
               );
 
-      if (!rows.length) {
+      if (timeframe === 'all-time' && !rows.length) {
         dispatch(setOverallStats(RemoteData.error('No sessions')));
         dispatch(setStatsIsDirty(false));
         return;
