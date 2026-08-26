@@ -4,17 +4,14 @@ import {
   SessionBlueprint,
   WeightedExerciseBlueprint,
 } from '@/models/blueprint-models';
-import { TemporalComparer } from '@/models/comparers';
 import {
   SessionJSON,
   fromLocalDateJSON,
   toLocalDateJSON,
 } from '@/models/storage/versions/latest';
 import { Weight, WeightUnit } from '@/models/weight';
-import { indexed } from '@/utils/enumerable';
 import { Duration, LocalDate, OffsetDateTime } from '@js-joda/core';
 import { match } from 'ts-pattern';
-import Enumerable from 'linq';
 import { P } from 'ts-pattern';
 import { uuid } from '@/utils/uuid';
 import { equal } from '@/models/session-models/helpers';
@@ -42,12 +39,28 @@ export class Session {
     readonly bodyweight: Weight | undefined,
     readonly restTimerStartTime: OffsetDateTime | undefined,
   ) {}
+
   get duration(): Duration | undefined {
-    return this.lastExercise?.latestTime && this.firstExercise?.earliestTime
-      ? Duration.between(
-          this.firstExercise.earliestTime,
-          this.lastExercise.latestTime,
-        )
+    let firstExercise: RecordedExercise | undefined;
+    let firstLatestTime: OffsetDateTime | undefined;
+    let lastLatestTime: OffsetDateTime | undefined;
+
+    for (const exercise of this.recordedExercises) {
+      if (!exercise.isStarted || !exercise.latestTime) {
+        continue;
+      }
+
+      if (!firstLatestTime || exercise.latestTime.isBefore(firstLatestTime)) {
+        firstLatestTime = exercise.latestTime;
+        firstExercise = exercise;
+      }
+      if (!lastLatestTime || exercise.latestTime.isAfter(lastLatestTime)) {
+        lastLatestTime = exercise.latestTime;
+      }
+    }
+
+    return firstExercise?.earliestTime && lastLatestTime
+      ? Duration.between(firstExercise.earliestTime, lastLatestTime)
       : undefined;
   }
 
@@ -193,19 +206,15 @@ export class Session {
           exerciseIndex,
           weightedExistingExercise.with({
             blueprint: newBlueprint as WeightedExerciseBlueprint,
-            potentialSets: Enumerable.range(
-              0,
-              (newBlueprint as WeightedExerciseBlueprint).sets,
-            )
-              .select(
-                (index) =>
-                  weightedExistingExercise.potentialSets.at(index) ??
-                  new PotentialSet(
-                    undefined,
-                    weightedExistingExercise.maxWeight,
-                  ),
-              )
-              .toArray(),
+            potentialSets: Array.from(
+              { length: (newBlueprint as WeightedExerciseBlueprint).sets },
+              (_, index) =>
+                weightedExistingExercise.potentialSets.at(index) ??
+                new PotentialSet(
+                  undefined,
+                  weightedExistingExercise.maxWeight,
+                ),
+            ),
           }),
         );
       }
@@ -399,19 +408,21 @@ export class Session {
   }
 
   get totalWeightLifted(): Weight {
-    return this.recordedExercises.reduce(
-      (b, ex) =>
-        b.plus(
-          ex instanceof RecordedWeightedExercise
-            ? ex.potentialSets.reduce(
-                (c, set) =>
-                  c.plus(set.weight.multipliedBy(set.set?.repsCompleted ?? 0)),
-                Weight.NIL,
-              )
-            : Weight.NIL,
-        ),
-      Weight.NIL,
-    );
+    let total = Weight.NIL;
+    for (const exercise of this.recordedExercises) {
+      if (!(exercise instanceof RecordedWeightedExercise)) {
+        continue;
+      }
+      for (const potentialSet of exercise.potentialSets) {
+        const repsCompleted = potentialSet.set?.repsCompleted ?? 0;
+        if (repsCompleted !== 0) {
+          total = total.plus(
+            potentialSet.weight.multipliedBy(repsCompleted),
+          );
+        }
+      }
+    }
+    return total;
   }
 
   get isComplete() {
@@ -432,12 +443,24 @@ export class Session {
     if (cardioExerciseWithRunningTimer) {
       return cardioExerciseWithRunningTimer;
     }
-    const latestExerciseIndex = Enumerable.from(recordedExercises)
-      .select(indexed)
-      .where((x) => x.item.isStarted)
-      .orderByDescending(({ item }) => item.latestTime, TemporalComparer)
-      .select((x) => x.index)
-      .firstOrDefault(-1);
+
+    let latestExerciseIndex = -1;
+    let latestExerciseTime: OffsetDateTime | undefined;
+    for (let index = 0; index < recordedExercises.length; index++) {
+      const exercise = recordedExercises[index]!;
+      if (!exercise.isStarted) {
+        continue;
+      }
+      const latestTime = exercise.latestTime;
+      if (
+        latestExerciseIndex === -1 ||
+        (latestTime &&
+          (!latestExerciseTime || latestTime.isAfter(latestExerciseTime)))
+      ) {
+        latestExerciseIndex = index;
+        latestExerciseTime = latestTime;
+      }
+    }
 
     const latestExerciseSupersetsWithNext = match(latestExerciseIndex)
       .with(-1, () => false)
@@ -517,8 +540,9 @@ export class Session {
       return undefined;
     }
     const exercise = this.lastExercise;
+    const nextExercise = this.nextExercise;
     if (
-      this.nextExercise &&
+      nextExercise &&
       exercise &&
       exercise.latestTime &&
       exercise instanceof RecordedWeightedExercise
@@ -545,25 +569,58 @@ export class Session {
   }
 
   get lastExercise(): RecordedExercise | undefined {
-    return Enumerable.from(this.recordedExercises)
-      .where((x) => x.isStarted)
-      .defaultIfEmpty(undefined)
-      .maxBy((x) => x.latestTime?.toInstant().toEpochMilli());
+    let latestExercise: RecordedExercise | undefined;
+    let latestTime: OffsetDateTime | undefined;
+
+    for (const exercise of this.recordedExercises) {
+      if (!exercise.isStarted || !exercise.latestTime) {
+        continue;
+      }
+      if (!latestTime || exercise.latestTime.isAfter(latestTime)) {
+        latestExercise = exercise;
+        latestTime = exercise.latestTime;
+      }
+    }
+    return latestExercise;
   }
 
   get latestWeightedExercise(): RecordedWeightedExercise | undefined {
-    return Enumerable.from(this.recordedExercises)
-      .where((x) => x.isStarted)
-      .where((x) => x instanceof RecordedWeightedExercise)
-      .defaultIfEmpty(undefined)
-      .maxBy((x) => x.latestTime?.toInstant().toEpochMilli());
+    let latestExercise: RecordedWeightedExercise | undefined;
+    let latestTime: OffsetDateTime | undefined;
+
+    for (const exercise of this.recordedExercises) {
+      if (
+        !exercise.isStarted ||
+        !(exercise instanceof RecordedWeightedExercise) ||
+        !exercise.latestTime
+      ) {
+        continue;
+      }
+      if (!latestTime || exercise.latestTime.isAfter(latestTime)) {
+        latestExercise = exercise;
+        latestTime = exercise.latestTime;
+      }
+    }
+    return latestExercise;
   }
 
   get firstExercise(): RecordedExercise | undefined {
-    return Enumerable.from(this.recordedExercises)
-      .where((x) => x.isStarted)
-      .defaultIfEmpty(undefined)
-      .minBy((x) => x.latestTime?.toInstant().toEpochMilli());
+    let firstExercise: RecordedExercise | undefined;
+    let earliestLatestTime: OffsetDateTime | undefined;
+
+    for (const exercise of this.recordedExercises) {
+      if (!exercise.isStarted || !exercise.latestTime) {
+        continue;
+      }
+      if (
+        !earliestLatestTime ||
+        exercise.latestTime.isBefore(earliestLatestTime)
+      ) {
+        firstExercise = exercise;
+        earliestLatestTime = exercise.latestTime;
+      }
+    }
+    return firstExercise;
   }
 
   get isFreeform(): boolean {
