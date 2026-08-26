@@ -1,5 +1,5 @@
 import { AesKey } from '@/models/encryption-models';
-import { fromSharedItemJSON } from '@/models/feed-models';
+import { FeedIdentity, fromSharedItemJSON } from '@/models/feed-models';
 import { RemoteData } from '@/models/remote';
 import { SharedItemJSON } from '@/models/storage/versions/latest';
 import { ApiErrorType } from '@/services/api-error';
@@ -8,10 +8,12 @@ import {
   encryptAndShare,
   feedApiError,
   fetchSharedItem,
+  setIdentity,
   setSharedItem,
 } from '@/store/feed';
 import { AddEffectFn } from '@/store/store';
 import { toUrlSafeHexString } from '@/utils/to-url-safe-hex-string';
+import { feedIdentitySchema } from '@/db/schema';
 
 export function addSharedItemEffects(addEffect: AddEffectFn) {
   addEffect(
@@ -22,13 +24,63 @@ export function addSharedItemEffects(addEffect: AddEffectFn) {
         cancelActiveListeners,
         getState,
         dispatch,
-        extra: { encryptionService, feedApiService, stringSharer, logger },
+        extra: {
+          db,
+          encryptionService,
+          feedApiService,
+          feedIdentityService,
+          stringSharer,
+          logger,
+        },
       },
     ) => {
       cancelActiveListeners();
-      const identity = getState().feed.identity;
-      if (!identity.isSuccess()) {
-        logger.debug('Identity', identity);
+
+      let identity = getState().feed.identity.match({
+        success: (value) => value,
+        error: () => undefined,
+        loading: () => undefined,
+        notAsked: () => undefined,
+      });
+
+      if (!identity) {
+        // GainsLab no longer hydrates the whole hidden Feed feature at startup.
+        // Sharing only needs an identity, so restore/create that single piece on
+        // demand rather than loading feed items/followers/inbox first.
+        const storedIdentity = (await db.select().from(feedIdentitySchema)).at(0);
+        if (storedIdentity) {
+          identity = FeedIdentity.fromJSON(storedIdentity.payload);
+          dispatch(setIdentity(RemoteData.success(identity)));
+        } else {
+          const identityResult =
+            await feedIdentityService.createFeedIdentityAsync(
+              undefined,
+              false,
+              false,
+              false,
+              undefined,
+            );
+          if (identityResult.isSuccess()) {
+            identity = identityResult.data;
+            dispatch(setIdentity(RemoteData.success(identity)));
+          } else {
+            dispatch(
+              feedApiError({
+                error: identityResult.error!,
+                message: 'Failed to share. Identity could not be created',
+                action: {
+                  ...action,
+                  payload: { ...action.payload, fromUserAction: true },
+                },
+              }),
+            );
+            return;
+          }
+        }
+      }
+
+      if (!identity) {
+        logger.debug('Identity unavailable after on-demand initialization');
         dispatch(
           feedApiError({
             error: {
@@ -54,12 +106,12 @@ export function addSharedItemEffects(addEffect: AddEffectFn) {
         await encryptionService.signRsa256PssAndEncryptAesCbcAsync(
           payloadBytes,
           aesKey,
-          identity.data.rsaKeyPair.privateKey,
+          identity.rsaKeyPair.privateKey,
         );
 
       const result = await feedApiService.postSharedItemAsync({
-        userId: identity.data.id,
-        password: identity.data.password,
+        userId: identity.id,
+        password: identity.password,
         encryptedPayload: encrypted,
         expiry: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
       });
@@ -108,7 +160,6 @@ export function addSharedItemEffects(addEffect: AddEffectFn) {
       }
       const { encryptedPayload, rsaPublicKey } = shared.data;
       const { key: aesKey } = a.payload;
-
       const decryptedBytes =
         await encryptionService.decryptAesCbcAndVerifyRsa256PssAsync(
           encryptedPayload,
