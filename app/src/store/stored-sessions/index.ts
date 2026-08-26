@@ -21,6 +21,8 @@ export interface WeightMigrateableExercise {
   unit: WeightUnit;
 }
 
+const RECENT_EXERCISES_PER_NAME = 10;
+
 interface StoredSessionState {
   // Core exercise/progression state is ready. This intentionally does not mean
   // that the entire workout history has been materialized in Redux.
@@ -28,6 +30,7 @@ interface StoredSessionState {
   isHistoryHydrated: boolean;
   sessions: Record<string, Session>;
   latestExercises: Record<string, RecordedExercise | undefined>; // KeyedExerciseBlueprint -> RecordedExercise
+  recentExercises: Record<NormalizedNameKey, RecordedExercise[]>;
   savedExercises: Record<string, ExerciseDescriptor>;
   filteredExerciseIds: string[];
   exercisesRequiringWeightMigration: WeightMigrateableExercise[];
@@ -39,6 +42,7 @@ const initialState: StoredSessionState = {
   isHistoryHydrated: false,
   sessions: {},
   latestExercises: {},
+  recentExercises: {},
   savedExercises: {},
   filteredExerciseIds: [],
   exercisesRequiringWeightMigration: [],
@@ -57,6 +61,12 @@ const storedSessionsSlice = createSlice({
       action: PayloadAction<Record<string, RecordedExercise | undefined>>,
     ) {
       state.latestExercises = action.payload;
+    },
+    setRecentExercises(
+      state,
+      action: PayloadAction<Record<NormalizedNameKey, RecordedExercise[]>>,
+    ) {
+      state.recentExercises = action.payload;
     },
     setStoredSessions(state, action: PayloadAction<Record<string, Session>>) {
       state.sessions = action.payload;
@@ -98,7 +108,7 @@ const storedSessionsSlice = createSlice({
       if (!deletedSession) return;
 
       // History deletion only happens after history hydration. Rebuilding once
-      // keeps earliestSession/latestExercises exact after removing a latest set.
+      // keeps all progression/history derivatives exact after removing a latest set.
       if (state.isHistoryHydrated) {
         rebuildDerivatives(state);
       }
@@ -140,6 +150,7 @@ const storedSessionsSlice = createSlice({
 
   selectors: {
     selectLatestExercises: (state: StoredSessionState) => state.latestExercises,
+    selectRecentExercises: (state: StoredSessionState) => state.recentExercises,
     selectIsHistoryHydrated: (state: StoredSessionState) =>
       state.isHistoryHydrated,
     selectSessions: createSelector(
@@ -182,6 +193,7 @@ const storedSessionsSlice = createSlice({
 
 function rebuildDerivatives(state: WritableDraft<StoredSessionState>) {
   state.latestExercises = {};
+  state.recentExercises = {};
   state.earliestSession = undefined;
   for (const session of Object.values(state.sessions)) {
     updateDerivatives(state, session as Session);
@@ -211,6 +223,22 @@ function updateDerivatives(
     ) {
       state.latestExercises[key] = exercise;
     }
+
+    if (!exercise.isStarted) return;
+    const normalizedKey = NormalizedName.fromExerciseBlueprint(
+      exercise.blueprint,
+    ).toString();
+    const recent = state.recentExercises[normalizedKey] ?? [];
+    recent.push(exercise);
+    recent.sort((a, b) =>
+      (b.latestTime ?? OffsetDateTime.MIN).compareTo(
+        a.latestTime ?? OffsetDateTime.MIN,
+      ),
+    );
+    if (recent.length > RECENT_EXERCISES_PER_NAME) {
+      recent.length = RECENT_EXERCISES_PER_NAME;
+    }
+    state.recentExercises[normalizedKey] = recent;
   });
 }
 
@@ -241,6 +269,7 @@ export const checkIfWeightMigrationRequired = createAction(
 export const {
   setIsHydrated,
   setLatestExercises,
+  setRecentExercises,
   setStoredSessions,
   upsertStoredSessions,
   addStoredSession,
@@ -258,58 +287,18 @@ export const {
   selectSession,
   selectExercises,
   selectLatestExercises,
+  selectRecentExercises,
   selectIsHistoryHydrated,
   selectExerciseById,
 } = storedSessionsSlice.selectors;
 
-const selectLatestOrderedRecordedExercises = createSelector(
-  [
-    storedSessionsSlice.selectors.selectSessions,
-    (_, maxRecordsPerExercise: number) => maxRecordsPerExercise,
-  ],
-  (
-    sessions,
-    maxRecordsPerExercise,
-  ): Record<NormalizedNameKey, RecordedExercise[]> => {
-    const grouped = new Map<NormalizedNameKey, RecordedExercise[]>();
-
-    for (const session of sessions) {
-      for (const exercise of session.recordedExercises) {
-        if (!exercise.isStarted) {
-          continue;
-        }
-        const key = NormalizedName.fromExerciseBlueprint(
-          exercise.blueprint,
-        ).toString();
-        const group = grouped.get(key);
-        if (group) {
-          group.push(exercise);
-        } else {
-          grouped.set(key, [exercise]);
-        }
-      }
-    }
-
-    const result: Record<NormalizedNameKey, RecordedExercise[]> = {};
-    for (const [key, exercises] of grouped) {
-      exercises.sort((a, b) =>
-        (b.latestTime ?? OffsetDateTime.MIN).compareTo(
-          a.latestTime ?? OffsetDateTime.MIN,
-        ),
-      );
-      result[key] = exercises.slice(0, maxRecordsPerExercise);
-    }
-    return result;
-  },
-);
-
 export const selectRecentlyCompletedExercises = createSelector(
-  selectLatestOrderedRecordedExercises,
-  (recentlyCompletedExercises) =>
+  [selectRecentExercises, (_, maxRecordsPerExercise: number) => maxRecordsPerExercise],
+  (recentExercises, maxRecordsPerExercise) =>
     (blueprint: ExerciseBlueprint): RecordedExercise[] =>
-      recentlyCompletedExercises[
+      (recentExercises[
         NormalizedName.fromExerciseBlueprint(blueprint).toString()
-      ] ?? [],
+      ] ?? []).slice(0, maxRecordsPerExercise),
 );
 
 export const selectPreviousComparableSession = createSelector(
