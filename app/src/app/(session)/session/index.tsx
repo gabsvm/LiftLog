@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { StyleSheet, View } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 
 export default function Index() {
   const dispatch = useDispatch();
@@ -53,11 +53,13 @@ export default function Index() {
       dismissTo('/');
     }
   };
+
   useEffect(() => {
     if (!session && !postWorkoutSessionId) {
       dismissTo('/');
     }
   }, [session, dismissTo, postWorkoutSessionId]);
+
   const showBodyweight = useAppSelector((x) => x.settings.showBodyweight);
 
   return (
@@ -101,57 +103,58 @@ function LiveWorkoutHeader({
 }) {
   const { colors } = useAppTheme();
   const { t } = useTranslate();
-  const complete = session.recordedExercises.filter(
-    (exercise) => exercise.isComplete,
-  ).length;
-  const total = session.recordedExercises.length;
-  const progress = total === 0 ? 0 : complete / total;
+
+  const { completedSets, totalSets } = session.recordedExercises.reduce(
+    (acc, exercise) => {
+      if (exercise.type === 'RecordedWeightedExercise') {
+        acc.totalSets += exercise.potentialSets.length;
+        acc.completedSets += exercise.potentialSets.filter((set) => !!set.set)
+          .length;
+      } else {
+        acc.totalSets += exercise.sets.length;
+        acc.completedSets += exercise.sets.filter((set) => set.isCompletelyFilled)
+          .length;
+      }
+      return acc;
+    },
+    { completedSets: 0, totalSets: 0 },
+  );
+  const progress = totalSets === 0 ? 0 : completedSets / totalSets;
 
   return (
     <View style={styles.liveHeader}>
-      <Text style={[styles.liveLabel, { color: colors.primary }]}>
-        {t('workout.live.label')}
-      </Text>
-      <Text variant="headlineMedium" style={styles.liveTitle}>
-        {session.blueprint.name}
-      </Text>
-      <Card
-        mode="contained"
+      <View style={styles.titleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.liveLabel, { color: colors.primary }]}>
+            {t('workout.live.label')}
+          </Text>
+          <Text variant="headlineMedium" style={styles.liveTitle}>
+            {session.blueprint.name}
+          </Text>
+        </View>
+        <Text
+          variant="titleMedium"
+          style={{ color: colors.primary, fontWeight: '800' }}
+        >
+          {completedSets}/{totalSets}
+        </Text>
+      </View>
+      <View
         style={[
-          styles.progressCard,
-          { backgroundColor: colors.surfaceContainer },
+          styles.progressTrack,
+          { backgroundColor: colors.outlineVariant },
         ]}
       >
-        <Card.Content style={styles.progressContent}>
-          <View style={{ flex: 1 }}>
-            <Text variant="labelLarge">
-              {t('workout.live.progress', { complete, total })}
-            </Text>
-            <View
-              style={[
-                styles.progressTrack,
-                { backgroundColor: colors.outlineVariant },
-              ]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: colors.primary,
-                    width: `${progress * 100}%`,
-                  },
-                ]}
-              />
-            </View>
-          </View>
-          <Text
-            variant="titleLarge"
-            style={{ color: colors.primary, fontWeight: '800' }}
-          >
-            {Math.round(progress * 100)}%
-          </Text>
-        </Card.Content>
-      </Card>
+        <View
+          style={[
+            styles.progressFill,
+            {
+              backgroundColor: colors.primary,
+              width: `${progress * 100}%`,
+            },
+          ]}
+        />
+      </View>
     </View>
   );
 }
@@ -160,7 +163,12 @@ const styles = StyleSheet.create({
   liveHeader: {
     paddingHorizontal: spacing.pageHorizontalMargin,
     paddingTop: spacing[4],
-    paddingBottom: spacing[2],
+    paddingBottom: spacing[3],
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing[4],
   },
   liveLabel: {
     fontSize: 11,
@@ -171,18 +179,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.8,
     marginTop: spacing[1],
-    marginBottom: spacing[4],
-  },
-  progressCard: {
-    borderRadius: 18,
-  },
-  progressContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[4],
   },
   progressTrack: {
-    height: 6,
+    height: 5,
     overflow: 'hidden',
     borderRadius: 99,
     marginTop: spacing[3],

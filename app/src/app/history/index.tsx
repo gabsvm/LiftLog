@@ -2,7 +2,6 @@ import CardActions from '@/components/presentation/foundation/card-actions';
 import CardList from '@/components/presentation/foundation/card-list';
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
 import EmptyInfo from '@/components/presentation/foundation/empty-info';
-import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
 import {
   ScreenHeading,
   SectionHeading,
@@ -27,11 +26,11 @@ import {
 } from '@/store/stored-sessions';
 import { uuid } from '@/utils/uuid';
 import { LocalDate, YearMonth } from '@js-joda/core';
-import { T, useTranslate } from '@tolgee/react';
+import { useTranslate } from '@tolgee/react';
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Card, Text, Tooltip } from 'react-native-paper';
+import { Card, Menu, Text } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { useDispatch } from 'react-redux';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -58,14 +57,17 @@ export default function History() {
     selectCurrentSession,
     'workoutSession',
   );
+
   const onSelectSession = (session: Session) => {
     dispatch(setCurrentSession({ target: 'historySession', session }));
     push('/history/edit');
   };
+
   const createSessionAtDate = (date: LocalDate) => {
     const newSession = Session.freeformSession(date, latesBodyweight);
     onSelectSession(newSession);
   };
+
   const [
     replaceCurrentSessionConfirmOpen,
     setReplaceCurrentSessionConfirmOpen,
@@ -75,6 +77,7 @@ export default function History() {
     setDeleteSelectedWorkoutConfirmOpen,
   ] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<Session>();
+
   const deleteWorkout = (session: Session, force = false) => {
     if (!force) {
       setSelectedWorkout(session);
@@ -102,10 +105,10 @@ export default function History() {
       );
       setReplaceCurrentSessionConfirmOpen(false);
       setSelectedWorkout(undefined);
-
       push('/(session)/session', { withAnchor: true });
     }
   };
+
   const handleSharePress = (session: Session) => {
     dispatch(
       encryptAndShare({
@@ -114,6 +117,7 @@ export default function History() {
       }),
     );
   };
+
   return (
     <>
       <Stack.Screen
@@ -130,9 +134,7 @@ export default function History() {
           paddingHorizontal: spacing.pageHorizontalMargin,
         }}
       >
-        <GainsLabWordmark compact />
         <ScreenHeading
-          eyebrow={t('generic.history.title').toUpperCase()}
           title={t('generic.history.title')}
           subtitle={t('screen.history.subtitle')}
         />
@@ -141,9 +143,7 @@ export default function History() {
           sessions={sessions}
           onDateSelect={createSessionAtDate}
           onMonthChange={setCurrentYearMonth}
-          onDeleteSession={(s) => {
-            deleteWorkout(s);
-          }}
+          onDeleteSession={deleteWorkout}
           onSessionSelect={onSelectSession}
         />
         <SectionHeading
@@ -154,6 +154,7 @@ export default function History() {
           testID="history-list"
           items={sessionsInMonth}
           cardType="contained"
+          onPress={onSelectSession}
           renderItemContent={(session) => (
             <Card.Content>
               <SessionSummaryTitle isFilled session={session} />
@@ -192,37 +193,13 @@ export default function History() {
             </Card.Content>
           )}
           renderItemActions={(session) => (
-            <CardActions style={{ marginTop: spacing[2] }}>
-              <Tooltip title={t('workout.share_workout.button')}>
-                <IconButton
-                  icon={'share'}
-                  mode="contained"
-                  onPress={() => handleSharePress(session)}
-                />
-              </Tooltip>
-              <Tooltip title={t('workout.start_this.button')}>
-                <IconButton
-                  mode="contained"
-                  icon={'playCircle'}
-                  onPress={() => startWorkout(session)}
-                />
-              </Tooltip>
-              <Tooltip title={t('generic.delete.button')}>
-                <IconButton
-                  mode="contained"
-                  icon={'delete'}
-                  onPress={() => deleteWorkout(session)}
-                />
-              </Tooltip>
-              <Button
-                onPress={() => onSelectSession(session)}
-                icon="edit"
-                mode="contained"
-                testID="history-edit-workout"
-              >
-                <T keyName="workout.edit.button" />
-              </Button>
-            </CardActions>
+            <HistorySessionActions
+              session={session}
+              onRepeat={() => startWorkout(session)}
+              onEdit={() => onSelectSession(session)}
+              onShare={() => handleSharePress(session)}
+              onDelete={() => deleteWorkout(session)}
+            />
           )}
           emptyTemplate={
             <EmptyInfo>
@@ -237,6 +214,7 @@ export default function History() {
           }
         />
       </FullHeightScrollView>
+
       <ConfirmationDialog
         headline={t('workout.replace_current.confirm.title')}
         textContent={t('workout.replace_in_progress.confirm.body')}
@@ -274,6 +252,72 @@ export default function History() {
   );
 }
 
+function HistorySessionActions({
+  session,
+  onRepeat,
+  onEdit,
+  onShare,
+  onDelete,
+}: {
+  session: Session;
+  onRepeat: () => void;
+  onEdit: () => void;
+  onShare: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslate();
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  return (
+    <CardActions style={styles.historyActions}>
+      <Button
+        mode="contained-tonal"
+        icon="playCircle"
+        onPress={onRepeat}
+        style={{ flex: 1 }}
+      >
+        {t('workout.start_this.button')}
+      </Button>
+      <Menu
+        visible={menuVisible}
+        onDismiss={() => setMenuVisible(false)}
+        anchor={
+          <IconButton
+            icon="moreHoriz"
+            onPress={() => setMenuVisible(true)}
+            accessibilityLabel={session.blueprint.name}
+          />
+        }
+      >
+        <Menu.Item
+          leadingIcon="edit"
+          title={t('workout.edit.button')}
+          onPress={() => {
+            setMenuVisible(false);
+            onEdit();
+          }}
+        />
+        <Menu.Item
+          leadingIcon="share"
+          title={t('workout.share_workout.button')}
+          onPress={() => {
+            setMenuVisible(false);
+            onShare();
+          }}
+        />
+        <Menu.Item
+          leadingIcon="delete"
+          title={t('generic.delete.button')}
+          onPress={() => {
+            setMenuVisible(false);
+            onDelete();
+          }}
+        />
+      </Menu>
+    </CardActions>
+  );
+}
+
 function HistoryMoreCount({ count }: { count: number }) {
   const { colors } = useAppTheme();
   const { t } = useTranslate();
@@ -301,5 +345,9 @@ const styles = StyleSheet.create({
     width: 22,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
+  },
+  historyActions: {
+    gap: spacing[2],
+    marginTop: spacing[2],
   },
 });

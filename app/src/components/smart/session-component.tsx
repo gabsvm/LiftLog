@@ -105,7 +105,7 @@ export default function SessionComponent(props: {
   };
 
   if (!session) {
-    return <Text>Loading</Text>;
+    return <Text>{t('generic.loading.label')}</Text>;
   }
 
   const notesComponent = session.blueprint.notes ? (

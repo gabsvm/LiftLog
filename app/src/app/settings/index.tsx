@@ -1,11 +1,9 @@
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
-import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
 import {
   ScreenHeading,
   SectionHeading,
 } from '@/components/presentation/foundation/screen-heading';
-import { spacing } from '@/hooks/useAppTheme';
-import { useAppTheme } from '@/hooks/useAppTheme';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { T, useTranslate } from '@tolgee/react';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -26,15 +24,11 @@ export default function Settings() {
   const openUrl = (url: string) => {
     void Linking.canOpenURL(url).then(() => Linking.openURL(url));
   };
-  const doCopyLogs = () => {
-    dispatch(copyLogs());
-  };
 
   const appVersion =
     Application.nativeApplicationVersion ??
     Application.nativeBuildVersion ??
     'Unknown';
-
   const bugReportUrl = `https://github.com/gabsvm/LiftLog/issues/new?labels=bug&app-version=${encodeURIComponent(appVersion)}&platform=${Platform.OS}&os-version=${Platform.Version}`;
 
   return (
@@ -45,52 +39,32 @@ export default function Settings() {
       <Stack.Screen
         options={{ title: t('navigation.more'), headerShown: false }}
       />
-      <GainsLabWordmark compact />
       <ScreenHeading
-        eyebrow={t('navigation.more').toUpperCase()}
         title={t('settings.settings.title')}
         subtitle={t('screen.settings.subtitle')}
       />
 
-      <SettingsGroup
-        title={t('home.plan.section')}
-        description={t('home.plan.manage_hint')}
-      >
+      <SettingsGroup title={t('home.plan.section')}>
         <List.Item
           onPress={() => push('/settings/program-list')}
           title={t('plan.manage.title')}
           description={t('plan.manage.subtitle')}
           left={(props) => <List.Icon icon={'assignment'} {...props} />}
-        ></List.Item>
+        />
         <List.Item
           onPress={() => push('/settings/manage-exercises')}
           title={t('exercise.manage.button')}
           description={t('exercise.manage.subtitle')}
           left={(props) => <List.Icon icon={'directionsRun'} {...props} />}
-        ></List.Item>
-        <List.Item
-          onPress={() => push('/settings/ai/planner')}
-          title={t('ai.planner.title')}
-          description={t('ai.planner.subtitle')}
-          left={(props) => <List.Icon icon={'bolt'} {...props} />}
         />
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t('settings.account_data.title')}
-        description={t('settings.account_data.subtitle')}
-      >
+      <SettingsGroup title={t('settings.account_data.title')}>
         <List.Item
           onPress={() => push('/settings/cloud-sync')}
           title={t('settings.cloud_sync.title')}
           description={t('settings.cloud_sync.subtitle')}
           left={(props) => <List.Icon icon={'cloudUpload'} {...props} />}
-        />
-        <List.Item
-          onPress={() => push('/settings/import-ironlog')}
-          title={t('settings.import_ironlog.title')}
-          description={t('settings.import_ironlog.subtitle')}
-          left={(props) => <List.Icon icon={'backup'} {...props} />}
         />
         <List.Item
           onPress={() => push('/settings/backup-and-restore')}
@@ -102,10 +76,7 @@ export default function Settings() {
         />
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t('settings.app_configuration.title')}
-        description={t('settings.appearance.subtitle')}
-      >
+      <SettingsGroup title={t('settings.app_configuration.title')}>
         <List.Item
           testID="appConfiguration"
           onPress={() => push('/settings/app-configuration')}
@@ -120,7 +91,6 @@ export default function Settings() {
           description={t('settings.localisation.subtitle')}
           left={(props) => <List.Icon icon={'language'} {...props} />}
         />
-
         <List.Item
           onPress={() => push('/settings/notifications')}
           title={t('settings.notifications.title')}
@@ -129,10 +99,19 @@ export default function Settings() {
         />
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t('settings.support.title')}
-        description={t('settings.support.subtitle')}
-      >
+      <SettingsGroup title={t('settings.support.title')}>
+        <List.Item
+          onPress={() => push('/settings/ai/planner')}
+          title={t('ai.planner.title')}
+          description={t('ai.planner.subtitle')}
+          left={(props) => <List.Icon icon={'bolt'} {...props} />}
+        />
+        <List.Item
+          onPress={() => push('/settings/import-ironlog')}
+          title={t('settings.import_ironlog.title')}
+          description={t('settings.import_ironlog.subtitle')}
+          left={(props) => <List.Icon icon={'backup'} {...props} />}
+        />
         <List.Item
           onPress={() => push('/feed')}
           title={t('feed.feed.title')}
@@ -140,23 +119,19 @@ export default function Settings() {
           left={(props) => <List.Icon icon={'forum'} {...props} />}
         />
         <List.Item
-          onPress={() =>
-            openUrl('https://github.com/gabsvm/LiftLog/issues/new')
-          }
+          onPress={() => openUrl('https://github.com/gabsvm/LiftLog/issues/new')}
           title={t('settings.feature_request.title')}
           description={t('settings.feature_request.subtitle')}
           left={(props) => <List.Icon icon={'star'} {...props} />}
         />
-
         <List.Item
           onPress={() => openUrl(bugReportUrl)}
           title={t('settings.bug_report.title')}
           description={t('settings.bug_report.subtitle')}
           left={(props) => <List.Icon icon={'bugReport'} {...props} />}
         />
-
         <List.Item
-          onPress={doCopyLogs}
+          onPress={() => dispatch(copyLogs())}
           title={t('settings.copy_logs.title')}
           description={t('settings.copy_logs.subtitle')}
           left={(props) => <List.Icon icon={'terminal'} {...props} />}
@@ -175,9 +150,9 @@ export default function Settings() {
             <T keyName="settings.app_info.title" />
           </Dialog.Title>
           <Dialog.Content>
-            <Text>
-              GainsLab is built on the open-source LiftLog foundation and is
-              licensed under AGPL-3.0. You can find the source code on{' '}
+            <Text>{t('settings.app_info.subtitle')}</Text>
+            <Text style={{ marginTop: spacing[3] }}>
+              LiftLog · AGPL-3.0 ·{' '}
               <Link
                 style={{ color: colors.primary, fontWeight: 'bold' }}
                 href="https://github.com/gabsvm/LiftLog"
@@ -185,10 +160,9 @@ export default function Settings() {
                 <Icon size={16} source={'share'} color={colors.primary} />
                 GitHub
               </Link>
-              .
             </Text>
-            <Text style={{ marginTop: spacing[3] }}>
-              GainsLab version {appVersion}
+            <Text style={{ marginTop: spacing[2] }}>
+              GainsLab {appVersion}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -204,17 +178,15 @@ export default function Settings() {
 
 function SettingsGroup({
   title,
-  description,
   children,
 }: {
   title: string;
-  description?: string;
   children: React.ReactNode;
 }) {
   const { colors } = useAppTheme();
   return (
     <View style={styles.group}>
-      <SectionHeading title={title} detail={description} />
+      <SectionHeading title={title} />
       <Card
         mode="contained"
         style={[styles.card, { backgroundColor: colors.surfaceContainer }]}
