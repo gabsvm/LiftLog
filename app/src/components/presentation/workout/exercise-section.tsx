@@ -46,38 +46,20 @@ export default function ExerciseSection<T extends RecordedExercise>(
   const [removeExerciseDialogOpen, setRemoveExerciseDialogOpen] =
     useState(false);
   const showStats = recordedExercise instanceof RecordedWeightedExercise;
-  const showPrevious = () => {
-    setPreviousDialogOpen(true);
-  };
 
   const interactiveButtons = props.isReadonly ? (
-    <View style={{ height: 40 }}></View>
+    <View style={{ height: 40 }} />
   ) : (
-    <View
-      style={{
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-      }}
-    >
+    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
       {props.showPreviousButton ? (
         <Tooltip title={t('workout.previously_completed.label')}>
           <IconButton
             testID="prev-exercise-btn"
             icon={'history'}
-            onPress={showPrevious}
+            onPress={() => setPreviousDialogOpen(true)}
           />
         </Tooltip>
       ) : null}
-      {!props.isReadonly ? (
-        <Tooltip title={t('generic.notes.label')}>
-          <IconButton
-            testID="exercise-notes-btn"
-            icon={'notes'}
-            onPress={() => setNotesDialogOpen(true)}
-          />
-        </Tooltip>
-      ) : null}
-
       <Menu
         visible={menuVisible}
         onDismiss={() => setMenuVisible(false)}
@@ -142,6 +124,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
       </Menu>
     </View>
   );
+
   return (
     <View
       style={{
