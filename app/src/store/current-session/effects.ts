@@ -45,6 +45,17 @@ import { copyLogs, showSnackbar } from '@/store/app';
 import { sessionMigrations } from '@/models/storage/versions/migrations/session';
 
 const storageKey = 'CurrentSessionStateV1';
+const storageVersionKey = `${storageKey}-Version`;
+const CURRENT_SESSION_PERSIST_DELAY_MS = 225;
+
+let pendingPersistTimer: ReturnType<typeof setTimeout> | undefined;
+let persistenceQueue: Promise<void> = Promise.resolve();
+let storageVersionWrittenThisRun = false;
+
+type PersistenceLogger = {
+  error: (message: string, error?: unknown) => void;
+};
+
 export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
   addEffect(
     initializeCurrentSessionStateSlice,
@@ -62,7 +73,7 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
         await withTimeout(
           async () => {
             const currentSessionVersion =
-              (await keyValueStore.getItem(`${storageKey}-Version`)) ?? '2';
+              (await keyValueStore.getItem(storageVersionKey)) ?? '2';
 
             switch (currentSessionVersion) {
               case '2':
@@ -94,7 +105,7 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
 
   addEffect(
     setCurrentSession,
-    async (
+    (
       _,
       {
         stateBeforeReduce,
@@ -103,38 +114,35 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
         extra: { keyValueStore, logger },
       },
     ) => {
-      const shouldPersistChanges =
-        stateAfterReduce.currentSession.isHydrated &&
-        stateAfterReduce.currentSession !== stateBeforeReduce.currentSession;
-
+      const previousWorkoutSession =
+        stateBeforeReduce.currentSession.workoutSession;
+      const currentWorkoutSession = stateAfterReduce.currentSession.workoutSession;
       const currentWorkoutSessionChanged =
-        stateBeforeReduce.currentSession.workoutSession !==
-        stateAfterReduce.currentSession.workoutSession;
+        previousWorkoutSession !== currentWorkoutSession;
+
       if (currentWorkoutSessionChanged) {
         dispatch(
           currentWorkoutSessionUpdated({
-            before: stateBeforeReduce.currentSession.workoutSession,
-            after: stateAfterReduce.currentSession.workoutSession,
+            before: previousWorkoutSession,
+            after: currentWorkoutSession,
           }),
         );
       }
 
-      if (shouldPersistChanges) {
-        try {
-          await keyValueStore.setItem(`${storageKey}-Version`, '3');
-          if (stateAfterReduce.currentSession.workoutSession) {
-            await keyValueStore.setItem(
-              storageKey,
-              toJsonString(
-                stateAfterReduce.currentSession.workoutSession.toJSON(),
-              ),
-            );
-          } else {
-            await keyValueStore.removeItem(storageKey);
-          }
-        } catch (e) {
-          logger.error('Failed to persist current session state', e);
-        }
+      // V3 storage only contains the active workout. History/feed/editor session
+      // changes used to rewrite this file too, despite not changing its payload.
+      if (
+        stateAfterReduce.currentSession.isHydrated &&
+        currentWorkoutSessionChanged
+      ) {
+        scheduleWorkoutSessionPersistence(
+          currentWorkoutSession,
+          keyValueStore,
+          logger,
+          // Clearing a finished workout should win over any queued snapshot and
+          // should not wait for the debounce window.
+          currentWorkoutSession === undefined,
+        );
       }
     },
   );
@@ -196,10 +204,13 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
     if (!previousValue && currentValue) {
       dispatch(broadcastWorkoutEvent({ type: 'WorkoutStartedEvent' }));
     }
+
+    const currentRestTimerEndTime = currentValue?.restTimerEndTime;
+    const previousRestTimerEndTime = previousValue?.restTimerEndTime;
     if (
-      currentValue?.restTimerEndTime &&
-      !currentValue.restTimerEndTime?.isEqual(
-        previousValue?.restTimerEndTime ?? OffsetDateTime.MAX,
+      currentRestTimerEndTime &&
+      !currentRestTimerEndTime.isEqual(
+        previousRestTimerEndTime ?? OffsetDateTime.MAX,
       )
     ) {
       dispatch(notifySetTimer());
@@ -269,6 +280,50 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
       dispatch(setCurrentSession({ session, target: action.payload.target }));
     },
   );
+}
+
+function scheduleWorkoutSessionPersistence(
+  session: Session | undefined,
+  keyValueStore: KeyValueStore,
+  logger: PersistenceLogger,
+  immediate: boolean,
+) {
+  if (pendingPersistTimer !== undefined) {
+    clearTimeout(pendingPersistTimer);
+    pendingPersistTimer = undefined;
+  }
+
+  const enqueue = () => {
+    pendingPersistTimer = undefined;
+    persistenceQueue = persistenceQueue
+      .then(() => persistWorkoutSessionSnapshot(session, keyValueStore))
+      .catch((error) => {
+        logger.error('Failed to persist current session state', error);
+      });
+  };
+
+  if (immediate) {
+    enqueue();
+    return;
+  }
+
+  pendingPersistTimer = setTimeout(enqueue, CURRENT_SESSION_PERSIST_DELAY_MS);
+}
+
+async function persistWorkoutSessionSnapshot(
+  session: Session | undefined,
+  keyValueStore: KeyValueStore,
+) {
+  if (session) {
+    if (!storageVersionWrittenThisRun) {
+      await keyValueStore.setItem(storageVersionKey, '3');
+      storageVersionWrittenThisRun = true;
+    }
+    await keyValueStore.setItem(storageKey, toJsonString(session.toJSON()));
+    return;
+  }
+
+  await keyValueStore.removeItem(storageKey);
 }
 
 async function withTimeout<T>(
