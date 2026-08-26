@@ -1,5 +1,4 @@
 import { WeightedExerciseBlueprint } from '@/models/blueprint-models';
-import { TemporalComparer } from '@/models/comparers';
 import { RecordedExercise } from '@/models/session-models/recorded-exercise';
 
 import {
@@ -12,7 +11,6 @@ import {
 import { Weight, WeightUnit } from '@/models/weight';
 import { IndexOutOfBoundsError } from '@/utils/index-out-of-bounds';
 import { Duration, OffsetDateTime } from '@js-joda/core';
-import Enumerable from 'linq';
 import { match } from 'ts-pattern';
 
 export type WeightAppliesTo = 'thisSet' | 'uncompletedSets' | 'allSets';
@@ -41,9 +39,10 @@ export class RecordedWeightedExercise {
   ): RecordedWeightedExercise {
     return new RecordedWeightedExercise(
       b,
-      Enumerable.range(0, b.sets)
-        .select(() => new PotentialSet(undefined, new Weight(0, unit)))
-        .toArray(),
+      Array.from(
+        { length: b.sets },
+        () => new PotentialSet(undefined, new Weight(0, unit)),
+      ),
       undefined,
     );
   }
@@ -169,22 +168,24 @@ export class RecordedWeightedExercise {
   }
 
   get maxWeight(): Weight {
-    return (
-      this.potentialSets.reduce(
-        (max, set) => {
-          return !max || set.weight.isGreaterThan(max) ? set.weight : max;
-        },
-        undefined as Weight | undefined,
-      ) ?? new Weight(0, 'kilograms')
-    );
+    let max: Weight | undefined;
+    for (const set of this.potentialSets) {
+      if (!max || set.weight.isGreaterThan(max)) {
+        max = set.weight;
+      }
+    }
+    return max ?? new Weight(0, 'kilograms');
   }
 
   get totalWeightLifted(): Weight {
-    return this.potentialSets.reduce(
-      (accum, set) =>
-        accum.plus(set.weight.multipliedBy(set.set?.repsCompleted ?? 0)),
-      Weight.NIL,
-    );
+    let total = Weight.NIL;
+    for (const set of this.potentialSets) {
+      const reps = set.set?.repsCompleted ?? 0;
+      if (reps !== 0) {
+        total = total.plus(set.weight.multipliedBy(reps));
+      }
+    }
+    return total;
   }
 
   get currentSetIndex() {
@@ -196,8 +197,10 @@ export class RecordedWeightedExercise {
   }
 
   get duration(): Duration | undefined {
-    return this.latestTime && this.earliestTime
-      ? Duration.between(this.earliestTime, this.latestTime)
+    const earliestTime = this.earliestTime;
+    const latestTime = this.latestTime;
+    return earliestTime && latestTime
+      ? Duration.between(earliestTime, latestTime)
       : undefined;
   }
 
@@ -210,17 +213,35 @@ export class RecordedWeightedExercise {
   }
 
   get lastRecordedSet(): PotentialSet | undefined {
-    const result = Enumerable.from(this.potentialSets)
-      .orderByDescending((x) => x.set?.completionDateTime, TemporalComparer)
-      .firstOrDefault((x) => x.set !== undefined);
-    return result;
+    let latest: PotentialSet | undefined;
+    let latestTime: OffsetDateTime | undefined;
+    for (const potentialSet of this.potentialSets) {
+      const completionDateTime = potentialSet.set?.completionDateTime;
+      if (
+        completionDateTime &&
+        (!latestTime || completionDateTime.isAfter(latestTime))
+      ) {
+        latest = potentialSet;
+        latestTime = completionDateTime;
+      }
+    }
+    return latest;
   }
 
   get firstRecordedSet(): PotentialSet | undefined {
-    const result = Enumerable.from(this.potentialSets)
-      .orderBy((x) => x.set?.completionDateTime, TemporalComparer)
-      .firstOrDefault((x) => x.set !== undefined);
-    return result;
+    let earliest: PotentialSet | undefined;
+    let earliestTime: OffsetDateTime | undefined;
+    for (const potentialSet of this.potentialSets) {
+      const completionDateTime = potentialSet.set?.completionDateTime;
+      if (
+        completionDateTime &&
+        (!earliestTime || completionDateTime.isBefore(earliestTime))
+      ) {
+        earliest = potentialSet;
+        earliestTime = completionDateTime;
+      }
+    }
+    return earliest;
   }
 
   get isComplete(): boolean {
