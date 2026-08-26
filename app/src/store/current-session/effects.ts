@@ -47,10 +47,13 @@ import { sessionMigrations } from '@/models/storage/versions/migrations/session'
 const storageKey = 'CurrentSessionStateV1';
 const storageVersionKey = `${storageKey}-Version`;
 const CURRENT_SESSION_PERSIST_DELAY_MS = 225;
+const ANDROID_SESSION_RESTORE_DELAY_MS = 350;
+const WORKOUT_WORKER_BROADCAST_DELAY_MS = 60;
 
 let pendingPersistTimer: ReturnType<typeof setTimeout> | undefined;
 let persistenceQueue: Promise<void> = Promise.resolve();
 let storageVersionWrittenThisRun = false;
+let pendingWorkoutBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
 
 type PersistenceLogger = {
   error: (message: string, error?: unknown) => void;
@@ -63,27 +66,25 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
       if (!getState().settings.isHydrated) {
         throw new Error('Settings must be hydrated before stored sessions');
       }
-      // The legacy file restore can block the Android JS runtime before the
-      // first screen renders. Do not hold the whole app hostage to it.
+
+      // Android used to skip restoring the active workout entirely to protect
+      // startup latency. Keep startup non-blocking, but restore shortly after
+      // the shell is allowed to render so an interrupted workout is not lost.
       if (Platform.OS === 'android') {
         dispatch(setIsHydrated(true));
+        setTimeout(() => {
+          void restorePersistedSessions(dispatch, keyValueStore, getState).catch(
+            (error) => {
+              logger.error('Failed to restore current session in background', error);
+            },
+          );
+        }, ANDROID_SESSION_RESTORE_DELAY_MS);
         return;
       }
+
       try {
         await withTimeout(
-          async () => {
-            const currentSessionVersion =
-              (await keyValueStore.getItem(storageVersionKey)) ?? '2';
-
-            switch (currentSessionVersion) {
-              case '2':
-                await handleV2ProtoStorage(dispatch, keyValueStore, getState);
-                break;
-              case '3':
-                await handleV3JsonStorage(dispatch, keyValueStore);
-                break;
-            }
-          },
+          () => restorePersistedSessions(dispatch, keyValueStore, getState),
           8_000,
           'Timed out while restoring the current session',
         );
@@ -215,22 +216,12 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
     ) {
       dispatch(notifySetTimer());
     }
+
     if (currentValue) {
-      dispatch(
-        broadcastWorkoutEvent({
-          type: 'WorkoutUpdatedEvent',
-          workout: currentValue.toJSON(),
-          restTimerInfo: getTimerInfo(currentValue),
-          cardioTimerInfo: getCardioTimerInfo(currentValue),
-          currentExerciseDetails: getCurrentExerciseDetails(currentValue),
-          totalWeightLifted: currentValue.totalWeightLifted.toJSON(),
-          workoutDuration: toDurationJSON(
-            currentValue.duration ?? Duration.ZERO,
-          ),
-        }),
-      );
+      scheduleWorkoutWorkerBroadcast(currentValue, dispatch);
     }
     if (previousValue && !currentValue) {
+      cancelPendingWorkoutWorkerBroadcast();
       dispatch(broadcastWorkoutEvent({ type: 'WorkoutEndedEvent' }));
     }
   });
@@ -282,6 +273,33 @@ export function applyCurrentSessionEffects(addEffect: AddEffectFn) {
   );
 }
 
+function scheduleWorkoutWorkerBroadcast(session: Session, dispatch: Dispatch) {
+  cancelPendingWorkoutWorkerBroadcast();
+  pendingWorkoutBroadcastTimer = setTimeout(() => {
+    pendingWorkoutBroadcastTimer = undefined;
+    // Build/serialize the comparatively large worker payload after the tap has
+    // had a chance to commit its UI update. Rapid edits coalesce to the latest.
+    dispatch(
+      broadcastWorkoutEvent({
+        type: 'WorkoutUpdatedEvent',
+        workout: session.toJSON(),
+        restTimerInfo: getTimerInfo(session),
+        cardioTimerInfo: getCardioTimerInfo(session),
+        currentExerciseDetails: getCurrentExerciseDetails(session),
+        totalWeightLifted: session.totalWeightLifted.toJSON(),
+        workoutDuration: toDurationJSON(session.duration ?? Duration.ZERO),
+      }),
+    );
+  }, WORKOUT_WORKER_BROADCAST_DELAY_MS);
+}
+
+function cancelPendingWorkoutWorkerBroadcast() {
+  if (pendingWorkoutBroadcastTimer !== undefined) {
+    clearTimeout(pendingWorkoutBroadcastTimer);
+    pendingWorkoutBroadcastTimer = undefined;
+  }
+}
+
 function scheduleWorkoutSessionPersistence(
   session: Session | undefined,
   keyValueStore: KeyValueStore,
@@ -324,6 +342,24 @@ async function persistWorkoutSessionSnapshot(
   }
 
   await keyValueStore.removeItem(storageKey);
+}
+
+async function restorePersistedSessions(
+  dispatch: Dispatch,
+  keyValueStore: KeyValueStore,
+  getState: () => RootState,
+) {
+  const currentSessionVersion =
+    (await keyValueStore.getItem(storageVersionKey)) ?? '2';
+
+  switch (currentSessionVersion) {
+    case '2':
+      await handleV2ProtoStorage(dispatch, keyValueStore, getState);
+      break;
+    case '3':
+      await handleV3JsonStorage(dispatch, keyValueStore, getState);
+      break;
+  }
 }
 
 async function withTimeout<T>(
@@ -379,7 +415,10 @@ async function handleV2ProtoStorage(
 
   if (currentSessionStateDao) {
     const currentSessionState = fromCurrentSessionDao(currentSessionStateDao);
-    if (currentSessionState.workoutSession) {
+    if (
+      currentSessionState.workoutSession &&
+      !selectCurrentSession(getState(), 'workoutSession')
+    ) {
       dispatch(
         setCurrentSession({
           target: 'workoutSession',
@@ -389,7 +428,10 @@ async function handleV2ProtoStorage(
         }),
       );
     }
-    if (currentSessionState.historySession) {
+    if (
+      currentSessionState.historySession &&
+      !selectCurrentSession(getState(), 'historySession')
+    ) {
       dispatch(
         setCurrentSession({
           target: 'historySession',
@@ -405,12 +447,16 @@ async function handleV2ProtoStorage(
 async function handleV3JsonStorage(
   dispatch: Dispatch,
   keyValueStore: KeyValueStore,
+  getState: () => RootState,
 ) {
   const bytes = (await keyValueStore.getItem(storageKey)) ?? 'null';
   const currentSessionState = fromJsonString(
     bytes as JsonString<AnyVersionSessionJSON | null>,
   );
-  if (!currentSessionState) {
+  if (
+    !currentSessionState ||
+    selectCurrentSession(getState(), 'workoutSession')
+  ) {
     return;
   }
 
