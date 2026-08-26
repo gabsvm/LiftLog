@@ -4,14 +4,12 @@ import { Session } from '@/models/session-models';
 import { useAppSelector } from '@/store';
 import { getDateOnDay } from '@/utils/format-date';
 import { DayOfWeek, LocalDate, Year, YearMonth } from '@js-joda/core';
-import Enumerable from 'linq';
-import { Animated, Easing, I18nManager, View } from 'react-native';
+import { I18nManager, View } from 'react-native';
 import { Card } from 'react-native-paper';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import TouchableRipple from '@/components/presentation/foundation/gesture-wrappers/touchable-ripple';
-import { ReactNode, useRef } from 'react';
+import { ReactNode } from 'react';
 import { useFormatDate } from '@/hooks/useFormatDate';
-import { useMountEffect } from '@/hooks/useMountEffect';
 
 interface HistoryCalendarCardProps {
   currentYearMonth: YearMonth;
@@ -48,26 +46,33 @@ export default function HistoryCalendarCard({
     7;
   const disableNextMonth = currentYearMonth.equals(YearMonth.now());
 
-  const sessionsByDate = Enumerable.from(sessions).toLookup((x) =>
-    x.date.toString(),
-  );
+  const sessionsByDate = new Map<string, Session[]>();
+  for (const session of sessions) {
+    const dateKey = session.date.toString();
+    const sessionsForDate = sessionsByDate.get(dateKey);
+    if (sessionsForDate) {
+      sessionsForDate.push(session);
+    } else {
+      sessionsByDate.set(dateKey, [session]);
+    }
+  }
 
   const previousMonth = () => onMonthChange(currentYearMonth.minusMonths(1));
   const nextMonth = () => onMonthChange(currentYearMonth.plusMonths(1));
 
   const handleDayPress = (date: LocalDate) => {
-    const sessionsForDate = sessionsByDate.get(date.toString());
-    if (sessionsForDate.any()) {
-      onSessionSelect(sessionsForDate.first());
+    const session = sessionsByDate.get(date.toString())?.[0];
+    if (session) {
+      onSessionSelect(session);
     } else {
       onDateSelect(date);
     }
   };
 
   const handleDayLongPress = (date: LocalDate) => {
-    const sessionsForDate = sessionsByDate.get(date.toString());
-    if (sessionsForDate.any()) {
-      onDeleteSession(sessionsForDate.first());
+    const session = sessionsByDate.get(date.toString())?.[0];
+    if (session) {
+      onDeleteSession(session);
     }
   };
 
@@ -115,7 +120,6 @@ export default function HistoryCalendarCard({
         return (
           <View style={{ flex: 1 }} key={dayOfWeek}>
             <SurfaceText
-              key={dayOfWeek}
               style={{ marginBottom: spacing[2], textAlign: 'center' }}
             >
               {formatDate(getDateOnDay(DayOfWeek.of(dayOfWeek + 1)), {
@@ -128,8 +132,6 @@ export default function HistoryCalendarCard({
     </ForceLTRRow>
   );
 
-  let dateEnterDelay = 0;
-
   const daysFromPreviousMonth = Array.from(
     { length: numberOfDaysToShowFromPreviousMonth },
     (_, offset) => {
@@ -137,9 +139,8 @@ export default function HistoryCalendarCard({
       const date = firstDayOfMonth.plusDays(offset);
       return (
         <HistoryCalendarDay
-          key={date.toString() + dateEnterDelay}
-          sessions={sessionsByDate.get(date.toString())}
-          delayEntranceAnimMs={(dateEnterDelay += 5)}
+          key={date.toString()}
+          sessions={sessionsByDate.get(date.toString()) ?? []}
           day={date}
           onPress={() => handleDayPress(date)}
           onLongPress={() => handleDayLongPress(date)}
@@ -154,9 +155,8 @@ export default function HistoryCalendarCard({
       const date = firstDayOfMonth.withDayOfMonth(i + 1);
       return (
         <HistoryCalendarDay
-          key={date.toString() + dateEnterDelay}
-          sessions={sessionsByDate.get(date.toString())}
-          delayEntranceAnimMs={(dateEnterDelay += 5)}
+          key={date.toString()}
+          sessions={sessionsByDate.get(date.toString()) ?? []}
           day={date}
           onPress={() => handleDayPress(date)}
           onLongPress={() => handleDayLongPress(date)}
@@ -171,10 +171,8 @@ export default function HistoryCalendarCard({
       const date = firstDayOfMonth.plusMonths(1).withDayOfMonth(i + 1);
       return (
         <HistoryCalendarDay
-          key={date.toString() + dateEnterDelay}
-          sessions={sessionsByDate.get(date.toString())}
-          // eslint-disable-next-line react-compiler/react-compiler, react-hooks/immutability
-          delayEntranceAnimMs={(dateEnterDelay += 5)}
+          key={date.toString()}
+          sessions={sessionsByDate.get(date.toString()) ?? []}
           day={date}
           onPress={() => handleDayPress(date)}
           onLongPress={() => handleDayLongPress(date)}
@@ -213,39 +211,24 @@ export default function HistoryCalendarCard({
 
 function HistoryCalendarDay(props: {
   day: LocalDate;
-  sessions: Enumerable.IEnumerable<Session>;
-  delayEntranceAnimMs: number;
+  sessions: Session[];
   onPress: () => void;
   onLongPress: () => void;
 }) {
   const isFuture = props.day.isAfter(LocalDate.now());
-  const hasSessions = props.sessions.any();
+  const hasSessions = props.sessions.length > 0;
   const isTodayWithNoSessions =
     props.day.equals(LocalDate.now()) && !hasSessions;
   const { colors } = useAppTheme();
   const formatDate = useFormatDate();
 
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useMountEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 150,
-      delay: props.delayEntranceAnimMs,
-      easing: Easing.out(Easing.back(1.5)),
-      useNativeDriver: true,
-    }).start();
-  });
-
   return (
-    <Animated.View
+    <View
       style={{
         flex: 1,
         borderRadius: 1000,
         overflow: 'hidden',
         alignItems: 'center',
-        opacity: anim,
-        transform: [{ scale: anim }],
       }}
     >
       <TouchableRipple
@@ -263,9 +246,7 @@ function HistoryCalendarDay(props: {
             borderRadius: 1000,
             borderColor: isTodayWithNoSessions ? colors.primary : 'transparent',
             borderWidth: 1,
-            backgroundColor: props.sessions.any()
-              ? colors.primary
-              : 'transparent',
+            backgroundColor: hasSessions ? colors.primary : 'transparent',
           }}
         >
           <SurfaceText
@@ -276,7 +257,7 @@ function HistoryCalendarDay(props: {
           </SurfaceText>
         </View>
       </TouchableRipple>
-    </Animated.View>
+    </View>
   );
 }
 
