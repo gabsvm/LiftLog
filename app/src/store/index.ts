@@ -6,7 +6,7 @@ import { applyProgramEffects } from '@/store/program/effects';
 import { applyCurrentSessionEffects } from '@/store/current-session/effects';
 import { applyAppEffects } from '@/store/app/effects';
 import { initializeAppStateSlice } from '@/store/app';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { applySettingsEffects } from '@/store/settings/effects';
 import { applyStoredSessionsEffects } from '@/store/stored-sessions/effects';
 import { applyFeedEffects } from '@/store/feed/effects';
@@ -45,26 +45,38 @@ export function useAppSelectorWithArg<TArg, TRes>(
     () => (s: RootState) => selector(s, arg),
     [selector, arg],
   );
-  return useAppSelector((s) => memod(s));
+  return useAppSelector(memod);
 }
+
 /**
- * Some components are pretty expensive (for some reason) to render, and when offscreen in a deeper stack or different tab should not cause renders
+ * Keep off-screen routes subscribed without letting their expensive selectors
+ * recalculate or trigger renders. The previous implementation still executed
+ * the selector on every store update and then mirrored it through local state.
  */
 function useAppSelectorWhenFocused<TRes>(
   selector: (s: RootState) => TRes,
 ): TRes {
   const isFocused = useIsFocused();
-  const currentValue = useAppSelector(selector);
-  const [focusedValue, setFocusedValue] = useState<TRes>(() => currentValue);
+  const cachedValue = useRef<TRes | undefined>(undefined);
+  const hasCachedValue = useRef(false);
 
-  useEffect(() => {
-    if (isFocused) {
-      setFocusedValue(currentValue);
-    }
-  }, [isFocused, currentValue]);
+  const focusAwareSelector = useCallback(
+    (state: RootState) => {
+      if (!isFocused && hasCachedValue.current) {
+        return cachedValue.current as TRes;
+      }
 
-  return focusedValue;
+      const nextValue = selector(state);
+      cachedValue.current = nextValue;
+      hasCachedValue.current = true;
+      return nextValue;
+    },
+    [isFocused, selector],
+  );
+
+  return useAppSelector(focusAwareSelector);
 }
+
 export function useAppSelectorWhenFocusedWithArg<TArg, TRes>(
   selector: (s: RootState, arg: TArg) => TRes,
   arg: TArg,
