@@ -8,11 +8,13 @@ import {
   initializeStoredSessionsStateSlice,
   migrateExerciseWeights,
   selectLatestExercises,
+  selectRecentExercises,
   selectSessions,
   setExercises,
   setExercisesRequiringWeightMigration,
   setIsHydrated,
   setLatestExercises,
+  setRecentExercises,
   setStoredSessions,
   updateExercise,
   upsertStoredSessions,
@@ -47,6 +49,7 @@ interface LatestExercisesCache {
   version: 1;
   sessionCount: number;
   exercises: Record<string, RecordedExerciseJSON>;
+  recentExercises: Record<string, RecordedExerciseJSON[]>;
 }
 
 export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
@@ -76,14 +79,25 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       if (cachedProgression) {
         try {
           const cache = JSON.parse(cachedProgression) as LatestExercisesCache;
-          if (cache.version === 1 && cache.sessionCount === sessionCount) {
+          if (
+            cache.version === 1 &&
+            cache.sessionCount === sessionCount &&
+            cache.recentExercises
+          ) {
             const latestExercises = Object.fromEntries(
               Object.entries(cache.exercises).map(([key, exercise]) => [
                 key,
                 fromRecordedExerciseJSON(exercise),
               ]),
             );
+            const recentExercises = Object.fromEntries(
+              Object.entries(cache.recentExercises).map(([key, exercises]) => [
+                key,
+                exercises.map(fromRecordedExerciseJSON),
+              ]),
+            );
             dispatch(setLatestExercises(latestExercises));
+            dispatch(setRecentExercises(recentExercises));
             progressionCacheLoaded = true;
           }
         } catch (e) {
@@ -94,7 +108,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       if (!progressionCacheLoaded) {
         // One-time fallback for existing installs. Once this cache has been
         // written, normal startups no longer deserialize the full history just
-        // to calculate the next workout.
+        // to calculate the next workout or show recent exercise context.
         await logger.time('initializeStoredSessionsFallback', async () => {
           const completedSessions = (
             await db.select().from(sessionsSchema)
@@ -107,11 +121,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
           );
           dispatch(setStoredSessions(completedSessions));
         });
-        await persistLatestExercisesCache(
-          getState(),
-          db,
-          keyValueStore,
-        );
+        await persistProgressionCache(getState(), db, keyValueStore);
       }
 
       const { exercises: builtInExerciseList } =
@@ -249,14 +259,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
   addEffect(
     migrateExerciseWeights,
-    async (
-      _,
-      {
-        dispatch,
-        getState,
-        extra: { db },
-      },
-    ) => {
+    async (_, { dispatch, getState, extra: { db } }) => {
       const state = getState();
       const historyWasHydrated = state.storedSessions.isHistoryHydrated;
       const sessions = historyWasHydrated
@@ -328,21 +331,14 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     deleteStoredSession,
     async (
       action,
-      {
-        stateAfterReduce,
-        extra: { logger, db, keyValueStore },
-      },
+      { stateAfterReduce, extra: { logger, db, keyValueStore } },
     ) => {
       await logger.time('deleteStoredSession', async () => {
         await db
           .delete(sessionsSchema)
           .where(eq(sessionsSchema.id, action.payload));
       });
-      await persistLatestExercisesCache(
-        stateAfterReduce,
-        db,
-        keyValueStore,
-      );
+      await persistProgressionCache(stateAfterReduce, db, keyValueStore);
     },
   );
   addEffect(
@@ -392,11 +388,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
             },
           });
       });
-      await persistLatestExercisesCache(
-        stateAfterReduce,
-        db,
-        keyValueStore,
-      );
+      await persistProgressionCache(stateAfterReduce, db, keyValueStore);
     },
   );
 
@@ -427,11 +419,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
             },
           });
       });
-      await persistLatestExercisesCache(
-        stateAfterReduce,
-        db,
-        keyValueStore,
-      );
+      await persistProgressionCache(stateAfterReduce, db, keyValueStore);
     },
   );
 
@@ -485,7 +473,7 @@ async function getSessionCount(db: ExpoSQLiteDatabase): Promise<number> {
   return Number(rows[0]?.count ?? 0);
 }
 
-async function persistLatestExercisesCache(
+async function persistProgressionCache(
   state: RootState,
   db: ExpoSQLiteDatabase,
   keyValueStore: {
@@ -493,16 +481,26 @@ async function persistLatestExercisesCache(
   },
 ) {
   const latestExercises = selectLatestExercises(state);
+  const recentExercises = selectRecentExercises(state);
   const exercises: Record<string, RecordedExerciseJSON> = {};
+  const recent: Record<string, RecordedExerciseJSON[]> = {};
+
   for (const [key, exercise] of Object.entries(latestExercises)) {
     if (exercise) {
       exercises[key] = (exercise as RecordedExercise).toJSON();
     }
   }
+  for (const [key, recordedExercises] of Object.entries(recentExercises)) {
+    recent[key] = recordedExercises.map((exercise) =>
+      (exercise as RecordedExercise).toJSON(),
+    );
+  }
+
   const cache: LatestExercisesCache = {
     version: 1,
     sessionCount: await getSessionCount(db),
     exercises,
+    recentExercises: recent,
   };
   await keyValueStore.setItem(
     latestExercisesCacheStorageKey,
