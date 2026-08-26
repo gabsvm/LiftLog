@@ -21,20 +21,27 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
       {
         getState,
         dispatch,
-        extra: { logger, encryptionService, tolgee, expoDb },
+        extra,
         signal,
         cancelActiveListeners,
         throwIfCancelled,
       },
     ) => {
       cancelActiveListeners();
+      const { logger, tolgee, expoDb } = extra;
       const start = performance.now();
       settings ??= getState().settings.remoteBackupSettings;
       const { endpoint, apiKey, includeFeedAccount } = settings;
 
+      // Home dispatches a backup check opportunistically. Keep this path nearly
+      // free when remote backups have never been configured: in particular, do
+      // not instantiate EncryptionService / QuickCrypto just to discover that
+      // there is no endpoint.
       if (!endpoint?.trim()) {
         return;
       }
+
+      const { encryptionService } = extra;
 
       try {
         throwIfCancelled();
@@ -60,9 +67,8 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
           loading: () => null,
           notAsked: () => null,
         });
-        console.log(
-          `Calculated Hash ${hashString} in `,
-          performance.now() - start,
+        logger.debug(
+          `Calculated remote backup hash in ${(performance.now() - start).toFixed(2)} ms`,
         );
 
         if (
@@ -74,7 +80,6 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
 
         throwIfCancelled();
 
-        // Prepare HTTP request
         const headers: Record<string, string> = {
           'Content-Type': 'application/octet-stream',
         };
@@ -83,11 +88,11 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
           headers['X-Api-Key'] = apiKey;
         }
 
-        // Send backup request with abort signal
         const response = await fetch(endpoint, {
           method: 'POST',
           headers,
           body: daoBytes,
+          signal,
         });
 
         if (!response.ok) {
@@ -96,7 +101,6 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
 
         throwIfCancelled();
 
-        // Update state on success
         const now = Instant.now();
         dispatch(
           setLastBackup(
@@ -118,11 +122,11 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
         }
         dispatch(remoteBackupSucceeded());
 
-        logger.info('Remote backup completed successfully' + hashString);
+        logger.info('Remote backup completed successfully ' + hashString);
       } catch (error) {
-        if (error instanceof TaskAbortError) {
+        if (error instanceof TaskAbortError || signal.aborted) {
           logger.info('Cancelled due to concurrent remote backup');
-          return; // Don't show error message for user-initiated cancellation
+          return;
         }
 
         logger.warn('Failed to backup data to remote server', error);
@@ -146,8 +150,6 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
         }
 
         dispatch(showSnackbar({ text: errorMessage }));
-
-        // Update state to indicate failure
         dispatch(setLastBackup(RemoteData.error(errorMessage)));
       }
     },
