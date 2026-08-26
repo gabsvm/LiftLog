@@ -9,10 +9,11 @@ import {
 } from '@/models/encryption-models';
 import crypto from 'crypto';
 import type { webcrypto } from 'crypto';
+import { install } from 'react-native-quick-crypto';
 
-// SHA-256 hash length in bytes
 const HashLengthBytes = 32;
 const SignatureLengthBytes = 256;
+let quickCryptoInstalled = false;
 
 export function toJsonBytes(object: unknown): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(object));
@@ -22,6 +23,16 @@ export function fromJsonBytes<T>(jsonBytes: Uint8Array): T {
 }
 
 export class EncryptionService {
+  constructor() {
+    // Feed, sharing and remote backup are optional features. Installing the
+    // QuickCrypto JSI bindings at application module load made every launch pay
+    // this cost even when none of those features were used.
+    if (!quickCryptoInstalled) {
+      install();
+      quickCryptoInstalled = true;
+    }
+  }
+
   async generateAesKey(): Promise<AesKey> {
     const params: webcrypto.AesKeyGenParams = {
       name: 'AES-CBC',
@@ -121,10 +132,13 @@ export class EncryptionService {
     );
 
     const sha256Hash = await crypto.subtle.digest('SHA-256', data);
+    const signature = new Uint8Array(
+      await crypto.subtle.sign(rsaParams, rsaKey, sha256Hash),
+    );
 
-    const signature = await crypto.subtle.sign(rsaParams, rsaKey, sha256Hash);
-
-    const payload = new Uint8Array([...data, ...new Uint8Array(signature)]);
+    const payload = new Uint8Array(data.length + signature.length);
+    payload.set(data, 0);
+    payload.set(signature, data.length);
 
     const encrypted = await crypto.subtle.encrypt(params, cryptoKey, payload);
 
@@ -214,12 +228,8 @@ export class EncryptionService {
       true,
       ['decrypt'],
     );
-    const chunkedData: Uint8Array[] = [];
-    for (let i = 0; i < data.dataChunks.length; i++) {
-      chunkedData.push(data.dataChunks[i]!);
-    }
     const decryptedChunks = await Promise.all(
-      chunkedData.map(async (chunk) => {
+      data.dataChunks.map(async (chunk) => {
         return new Uint8Array(
           await crypto.subtle.decrypt(
             {
@@ -231,12 +241,18 @@ export class EncryptionService {
         );
       }),
     );
-    return new Uint8Array(
-      decryptedChunks.reduce(
-        (acc, chunk) => [...acc, ...chunk],
-        [] as number[],
-      ),
+
+    const totalLength = decryptedChunks.reduce(
+      (total, chunk) => total + chunk.length,
+      0,
     );
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of decryptedChunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return result;
   }
 
   async signRsaPssSha256Async(
