@@ -10,7 +10,6 @@ import { AddEffectFn } from '@/store/store';
 import { sleep } from '@/utils/sleep';
 import { initializeSettingsStateSlice } from '../settings';
 import { initializeProgramStateSlice } from '../program';
-import { initializeFeedStateSlice } from '../feed';
 import { initializeAiPlannerStateSlice } from '../ai-planner';
 import { setStringAsync } from 'expo-clipboard';
 
@@ -25,9 +24,12 @@ export function applyAppEffects(addEffect: AddEffectFn) {
       await databaseMigrationService.migrate();
       dispatch(initializeSettingsStateSlice());
       dispatch(initializeProgramStateSlice());
-      dispatch(initializeFeedStateSlice());
       dispatch(initializeAiPlannerStateSlice());
 
+      // Feed is an advanced/hidden destination in GainsLab. Its hydration can
+      // read several tables, generate cryptographic keys and touch the network.
+      // It is initialized by the Feed route (or identity-on-demand for sharing)
+      // instead of competing with the critical startup path.
       dispatch(setIsHydrated(true));
     },
   );
