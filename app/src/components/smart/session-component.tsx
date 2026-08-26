@@ -20,7 +20,7 @@ import WeightedExercise from '@/components/presentation/workout/weighted/weighte
 import WeightDisplay from '@/components/presentation/foundation/editors/weight-display';
 import BigNumber from 'bignumber.js';
 import RestTimer from '@/components/presentation/workout/rest-timer';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useCallback, useState } from 'react';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
 import { ExerciseBlueprint } from '@/models/blueprint-models';
 import FullScreenDialog from '@/components/presentation/foundation/full-screen-dialog';
@@ -34,6 +34,8 @@ import { match, P } from 'ts-pattern';
 import { CardioExercise } from '@/components/presentation/workout/cardio/cardio-exercise';
 import WeightFormat from '../presentation/foundation/weight-format';
 import { formatDuration } from '@/utils/format-date';
+
+const BODYWEIGHT_INCREMENT = new BigNumber('0.1');
 
 export default function SessionComponent(props: {
   target: SessionTarget;
@@ -51,27 +53,31 @@ export default function SessionComponent(props: {
     selectRecentlyCompletedExercises,
     10,
   );
-  const resetTimer = (time: OffsetDateTime | undefined) => {
-    updateSession((s) => s.with({ restTimerStartTime: time }));
-  };
-  const withLatestSession = (callback: (session: Session) => void) => {
-    // Ensure we always have the latest session, allows us to call callbacks consecutively
-    const latestSession = selectCurrentSession(getState(), props.target);
-    if (!latestSession) {
-      return;
-    }
-    callback(latestSession);
-  };
-  const updateSession = (reducer: (session: Session) => Session) => {
-    withLatestSession((latestSession) => {
+
+  const updateSession = useCallback(
+    (reducer: (session: Session) => Session) => {
+      // Always reduce from the latest store value. This lets one user action
+      // produce exactly one Redux update without risking stale session state.
+      const latestSession = selectCurrentSession(getState(), props.target);
+      if (!latestSession) {
+        return;
+      }
       dispatch(
         setCurrentSession({
           session: reducer(latestSession),
           target: props.target,
         }),
       );
-    });
-  };
+    },
+    [dispatch, getState, props.target],
+  );
+
+  const resetTimer = useCallback(
+    (time: OffsetDateTime | undefined) => {
+      updateSession((s) => s.with({ restTimerStartTime: time }));
+    },
+    [updateSession],
+  );
 
   const isReadonly =
     props.target === 'feedSession' || props.target === 'sharedSession';
@@ -107,6 +113,11 @@ export default function SessionComponent(props: {
   if (!session) {
     return <Text>{t('generic.loading.label')}</Text>;
   }
+
+  // These getters walk the exercise list. Calculate each once per render rather
+  // than once per exercise card.
+  const nextExercise = session.nextExercise;
+  const lastExercise = session.lastExercise;
 
   const notesComponent = session.blueprint.notes ? (
     <Card
@@ -148,19 +159,23 @@ export default function SessionComponent(props: {
           timeProvider={() =>
             props.target === 'workoutSession'
               ? OffsetDateTime.now()
-              : (session.lastExercise?.latestTime ??
+              : (lastExercise?.latestTime ??
                 session.date
                   .atTime(LocalTime.now())
                   .atZone(ZoneId.systemDefault())
                   .toOffsetDateTime())
           }
-          resetSetTimer={() =>
-            withLatestSession((s) => resetTimer(s.lastExercise?.latestTime))
-          }
           recordedExercise={item}
-          toStartNext={session.nextExercise === item}
-          updateExercise={(ex) =>
-            updateSession((s) => s.withExercise(index, ex))
+          toStartNext={nextExercise === item}
+          updateExercise={(ex, options) =>
+            updateSession((s) => {
+              const updatedSession = s.withExercise(index, ex);
+              return options?.resetTimer
+                ? updatedSession.with({
+                    restTimerStartTime: updatedSession.lastExercise?.latestTime,
+                  })
+                : updatedSession;
+            })
           }
           onEditExercise={() => {
             setEditingExerciseBlueprint(item.blueprint);
@@ -190,7 +205,7 @@ export default function SessionComponent(props: {
               ),
             )
           }
-          toStartNext={session.nextExercise === item}
+          toStartNext={nextExercise === item}
           onEditExercise={() => {
             setEditingExerciseBlueprint(item.blueprint);
             setExerciseToEditIndex(index);
@@ -239,19 +254,17 @@ export default function SessionComponent(props: {
           updateWeight={(bodyweight) =>
             updateSession((s) => s.with({ bodyweight }))
           }
-          increment={new BigNumber('0.1')}
+          increment={BODYWEIGHT_INCREMENT}
           label={t('exercise.bodyweight.label')}
         />
       </Card.Content>
     </Card>
   ) : null;
 
-  const lastExercise = session.lastExercise;
   const lastRecordedSet =
     lastExercise instanceof RecordedWeightedExercise
       ? lastExercise?.lastRecordedSet
       : undefined;
-  const nextExercise = session.nextExercise;
   // We only want to show the rest timer - which is primarily for weights
   // When we are currently working out, and the exercises we are on (or were just on) are weighted - rests for cardio aren't implemented
   const showRestTimer =
