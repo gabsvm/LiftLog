@@ -21,16 +21,19 @@ import {
 import { addUnpublishedSessionId, encryptAndShare } from '@/store/feed';
 import {
   deleteStoredSession,
-  ensureHistoryHydrated,
-  selectIsHistoryHydrated,
-  selectSessions,
-  selectSessionsInMonth,
+  getSessionReferenceTime,
 } from '@/store/stored-sessions';
+import {
+  getHistoryCalendarRange,
+  requestHistoryRange,
+  selectHistoryViewLoading,
+  selectHistoryViewSessions,
+} from '@/store/history-view';
 import { uuid } from '@/utils/uuid';
 import { LocalDate, YearMonth } from '@js-joda/core';
 import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Card, Menu, Text } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
@@ -44,16 +47,12 @@ export default function History() {
   const dispatch = useDispatch();
   const formatDate = useFormatDate();
   const [currentYearMonth, setCurrentYearMonth] = useState(YearMonth.now());
-  const historyHydrated = useAppSelector(selectIsHistoryHydrated);
+  const historyLoading = useAppSelector(selectHistoryViewLoading);
+  const historySessions = useAppSelector(selectHistoryViewSessions);
   const latesBodyweight = useAppSelector((x) =>
     x.program.upcomingSessions
       .map((x) => x.at(0)?.bodyweight)
       .unwrapOr(undefined),
-  );
-  const sessions = useAppSelector(selectSessions);
-  const sessionsInMonth = useAppSelectorWithArg(
-    selectSessionsInMonth,
-    currentYearMonth,
   );
   const { push } = useRouter();
   const currentWorkoutSession = useAppSelectorWithArg(
@@ -61,12 +60,24 @@ export default function History() {
     'workoutSession',
   );
 
+  const sessionsInMonth = useMemo(
+    () =>
+      historySessions
+        .filter(
+          (session) =>
+            session.date.year() === currentYearMonth.year() &&
+            session.date.month().equals(currentYearMonth.month()),
+        )
+        .sort((a, b) =>
+          getSessionReferenceTime(b).compareTo(getSessionReferenceTime(a)),
+        ),
+    [currentYearMonth, historySessions],
+  );
+
   useFocusEffect(
     useCallback(() => {
-      if (!historyHydrated) {
-        dispatch(ensureHistoryHydrated());
-      }
-    }, [dispatch, historyHydrated]),
+      dispatch(requestHistoryRange(getHistoryCalendarRange(currentYearMonth)));
+    }, [currentYearMonth, dispatch]),
   );
 
   const onSelectSession = (session: Session) => {
@@ -149,7 +160,7 @@ export default function History() {
           title={t('generic.history.title')}
           subtitle={t('screen.history.subtitle')}
         />
-        {!historyHydrated ? (
+        {historyLoading ? (
           <View style={styles.loadingHistory}>
             <ActivityIndicator />
           </View>
@@ -157,7 +168,7 @@ export default function History() {
           <>
             <HistoryCalendarCard
               currentYearMonth={currentYearMonth}
-              sessions={sessions}
+              sessions={historySessions}
               onDateSelect={createSessionAtDate}
               onMonthChange={setCurrentYearMonth}
               onDeleteSession={deleteWorkout}
