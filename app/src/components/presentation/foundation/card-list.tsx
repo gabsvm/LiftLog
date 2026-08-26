@@ -44,7 +44,7 @@ export default function CardList<T>(props: CardListProps<T>) {
         rest['style'],
       ]}
     >
-      {!!items.length || emptyTemplate}
+      {!items.length ? emptyTemplate : null}
       {items.map((item, i) => {
         const title = renderItemTitle && {
           ...renderItemTitle(item, i),
