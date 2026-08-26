@@ -8,7 +8,6 @@ import '@/utils/date-locale';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import ServicesProvider from '@/components/smart/services-provider';
 import { PreventNavigateProvider } from '@/hooks/usePreventNavigate';
-import { install } from 'react-native-quick-crypto';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useTranslate } from '@tolgee/react';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
@@ -19,14 +18,6 @@ import { useEffect } from 'react';
 void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
   console.warn('Could not keep the native splash screen visible.', error);
 });
-
-// QuickCrypto powers encrypted inbox features, but it must not prevent the
-// application shell from starting when a native initialization fails.
-try {
-  install();
-} catch (error) {
-  console.warn('QuickCrypto could not be initialized.', error);
-}
 
 LogBox.ignoreLogs([
   /.*is not a valid icon name.*/,
