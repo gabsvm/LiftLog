@@ -2,7 +2,7 @@ import { useAppTheme, spacing } from '@/hooks/useAppTheme';
 import { ReactNode, useEffect, useRef } from 'react';
 import { View, ViewProps, Animated, Easing } from 'react-native';
 
-export const ANIMATION_DURATION = 600;
+export const ANIMATION_DURATION = 180;
 
 export default function FocusRing({
   isSelected,
@@ -26,35 +26,34 @@ export default function FocusRing({
     Animated.timing(growAnim, {
       toValue: isSelected ? 1 : 0,
       duration: ANIMATION_DURATION,
-      easing: Easing.bezier(0.2, 0, 0, 1),
-      useNativeDriver: false,
+      easing: Easing.out(Easing.cubic),
+      // The previous implementation animated top/bottom/left/right and border
+      // width on JS for 600ms after every set. Opacity/scale can run entirely on
+      // the native driver, keeping set interactions responsive on slower phones.
+      useNativeDriver: true,
     }).start();
   }, [isSelected, growAnim]);
 
-  const pos = growAnim.interpolate({
-    inputRange: [0, 0.25, 1],
-    outputRange: [0, -8, -padding],
+  const scale = growAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.97, 1],
   });
-
-  const borderWidth = growAnim.interpolate({
-    inputRange: [0, 0.25, 1],
-    outputRange: [0, 8, 3],
-  });
-  const opacity = growAnim;
 
   return (
     <View style={style}>
       <Animated.View
+        pointerEvents="none"
         style={{
           borderColor: colors.outline,
           position: 'absolute',
-          top: pos,
-          bottom: pos,
-          left: pos,
-          right: pos,
-          opacity: opacity,
+          top: -padding,
+          bottom: -padding,
+          left: -padding,
+          right: -padding,
+          opacity: growAnim,
+          transform: [{ scale }],
           borderRadius: radius ?? spacing[14],
-          borderWidth: isSelected ? borderWidth : 0,
+          borderWidth: 3,
         }}
         {...rest}
       />
