@@ -36,6 +36,8 @@ import { WelcomeWizard } from '@/components/smart/welcome-wizard';
 import { SessionDiffSaveDialog } from '@/components/smart/session-diff-save-dialog';
 import { CurrentWorkoutReplacer } from '@/components/smart/current-workout-replacer';
 
+const HOME_MAINTENANCE_DELAY_MS = 450;
+
 function PlanSummary() {
   const { push } = useRouter();
   const { colors } = useAppTheme();
@@ -99,6 +101,7 @@ function ListUpcomingWorkouts({
       <WelcomeWizard />
       <GainsLabWordmark compact />
       <ScreenHeading title={t('home.title')} subtitle={t('home.subtitle')} />
+      <PlanSummary />
 
       {currentSession && (
         <>
@@ -138,7 +141,6 @@ function ListUpcomingWorkouts({
         ))}
       </View>
 
-      <PlanSummary />
       <Button
         mode="outlined"
         icon="fitnessCenter"
@@ -317,9 +319,15 @@ export default function Index() {
 
   useFocusEffect(
     useCallback(() => {
+      // Refresh the UI-critical data immediately. Network backup/publishing can
+      // wait until after the tab transition and first paint.
       dispatch(fetchUpcomingSessions());
-      dispatch(publishUnpublishedSessions());
-      dispatch(executeRemoteBackup({}));
+      const maintenanceTimer = setTimeout(() => {
+        dispatch(publishUnpublishedSessions());
+        dispatch(executeRemoteBackup({}));
+      }, HOME_MAINTENANCE_DELAY_MS);
+
+      return () => clearTimeout(maintenanceTimer);
     }, [dispatch]),
   );
 
@@ -374,7 +382,7 @@ const styles = StyleSheet.create({
   },
   planSummary: {
     borderRadius: 18,
-    marginTop: spacing[1],
+    marginBottom: spacing[1],
   },
   planSummaryContent: {
     minHeight: 68,
