@@ -1,5 +1,4 @@
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
-import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
 import { ScreenHeading } from '@/components/presentation/foundation/screen-heading';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 import { Remote } from '@/components/presentation/foundation/remote';
@@ -20,7 +19,9 @@ import {
 import { formatDuration } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect } from 'expo-router';
-import { StyleSheet, View, Text } from 'react-native';
+import { useCallback } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import { match } from 'ts-pattern';
 
@@ -28,9 +29,13 @@ export default function StatsPage() {
   const { t } = useTranslate();
   const timePeriod = useAppSelector((x) => x.stats.overallViewTime);
   const dispatch = useDispatch();
-  useFocusEffect(() => {
-    dispatch(fetchOverallStats());
-  });
+
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchOverallStats());
+    }, [dispatch]),
+  );
+
   const stats = useAppSelector(selectOverallView);
   return (
     <FullHeightScrollView
@@ -43,9 +48,7 @@ export default function StatsPage() {
           headerShown: false,
         }}
       />
-      <GainsLabWordmark compact />
       <ScreenHeading
-        eyebrow={t('navigation.progress').toUpperCase()}
         title={t('stats.statistics.title')}
         subtitle={t('screen.stats.subtitle')}
       />
@@ -57,7 +60,7 @@ export default function StatsPage() {
       </View>
       <Remote
         value={stats}
-        success={(stats) => <LoadedStats stats={stats} />}
+        success={(loadedStats) => <LoadedStats stats={loadedStats} />}
       />
     </FullHeightScrollView>
   );
@@ -103,11 +106,6 @@ function OverallStatsGrid({ stats }: { stats: GranularStatisticView }) {
           icon={'function'}
         />
         <SingleValueStatisticCard
-          title={t('stats.max_weight_in_workout.label')}
-          value={stats.maxWeightLiftedInAWorkout?.shortLocaleFormat(0) ?? '-'}
-          icon={'weight'}
-        />
-        <SingleValueStatisticCard
           title={t('workout.average_length.label')}
           icon={'avgTime'}
           value={formatDuration(stats.averageSessionLength, 'mins')}
@@ -117,28 +115,15 @@ function OverallStatsGrid({ stats }: { stats: GranularStatisticView }) {
           icon={'monitorWeight'}
           value={<BodyweightStatValue stats={stats} />}
         />
-        <SingleValueStatisticCard
-          title={t('stats.heaviest_lift.label')}
-          icon={'fitnessCenter'}
-          value={
-            stats.heaviestLift
-              ? stats.heaviestLift.exerciseName +
-                ' - ' +
-                stats.heaviestLift.weight.shortLocaleFormat(0)
-              : '-'
-          }
-        />
       </SingleValueStatisticsGrid>
     </TitledSection>
   );
 }
 
 function formatWeeklyRate(value: number) {
-  const rounded =
-    Math.abs(value - Math.round(value)) < 0.05
-      ? Math.round(value).toString()
-      : value.toFixed(1);
-  return rounded;
+  return Math.abs(value - Math.round(value)) < 0.05
+    ? Math.round(value).toString()
+    : value.toFixed(1);
 }
 
 function BodyweightStatValue({
