@@ -8,7 +8,6 @@ import { SingleValueStatisticsGrid } from '@/components/presentation/stats/singl
 import { TimePeriodSelector } from '@/components/presentation/stats/time-period-selector';
 import { TitledSection } from '@/components/presentation/stats/titled-section';
 import { spacing } from '@/hooks/useAppTheme';
-import { Weight } from '@/models/weight';
 import { useAppSelector } from '@/store';
 import {
   fetchOverallStats,
@@ -132,11 +131,12 @@ function BodyweightStatValue({
   stats: GranularStatisticView;
 }) {
   const showBodyweight = useAppSelector((x) => x.settings.showBodyweight);
-  if (!showBodyweight) {
-    return <Text>-</Text>;
+  if (!showBodyweight || bodyweightStats.statistics.length === 0) {
+    return <Text>—</Text>;
   }
+
   const currentValue = bodyweightStats.currentValue;
-  const earliestValue = bodyweightStats.statistics[0]?.value ?? Weight.NIL;
+  const earliestValue = bodyweightStats.statistics[0]!.value;
   const change = currentValue.minus(earliestValue);
   const changeDirection = match({
     zero: change.value.isZero(),
