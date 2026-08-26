@@ -243,7 +243,16 @@ export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({
   if (trueBlack) {
     newTheme = {
       ...newTheme,
-      dark: { ...theme.dark, background: '#000000', surface: '#000000' },
+      dark: {
+        ...newTheme.dark,
+        background: '#000000',
+        surface: '#000000',
+        surfaceContainerLowest: '#000000',
+        surfaceContainerLow: '#050505',
+        surfaceContainer: '#0A0A0A',
+        surfaceContainerHigh: '#111111',
+        surfaceContainerHighest: '#171717',
+      },
     };
   }
   useEffect(() => {
