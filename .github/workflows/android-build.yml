@@ -4,7 +4,12 @@ on:
     branches-ignore: [main]
     paths:
       - app/**
-      - .github/**
+      - .github/workflows/android-build.yml
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,10 +35,11 @@ jobs:
       - name: Install
         run: npm ci
         working-directory: ./app
+
       - name: Prebuild
         run: npm run prebuild
         working-directory: ./app
 
-      - name: Build Android
-        run: ./gradlew build
+      - name: Build optimized Android release
+        run: ./gradlew assembleRelease
         working-directory: ./app/android
