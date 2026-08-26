@@ -25,30 +25,32 @@ export default function FullHeightScrollView({
   const [floatingBottomSize, setFloatingBottomSize] = useState(0);
   const insets = useSafeAreaInsets();
   const headerHeight = useContext(HeaderHeightContext); // Intentionally don't use useHeaderHeight as it might not be in a stack
-  const topInsetHeight =
-    Platform.select({
-      ios: headerHeight,
-      android: !headerHeight ? insets.top : 0,
-    }) ?? 0;
+
+  // Headerless Android screens need a fixed viewport inset. Putting this as a
+  // spacer inside the ScrollView lets content scroll underneath the status bar.
+  const androidTopInset =
+    Platform.OS === 'android' && !headerHeight ? insets.top : 0;
+  // Preserve the existing iOS header compensation behavior.
+  const scrollTopInset = Platform.OS === 'ios' ? (headerHeight ?? 0) : 0;
   const bottomInsetHeight =
     floatingBottomSize + (Platform.select({ ios: insets.bottom }) ?? 0);
 
   return (
     <View
-      style={[
-        {
-          backgroundColor: colors.surface,
-          flex: 1,
-        },
-      ]}
+      style={{
+        backgroundColor: colors.surface,
+        flex: 1,
+        paddingTop: androidTopInset,
+      }}
     >
       {!avoidKeyboard ? (
         <ScrollView
           onScroll={handleScroll}
-          style={[scrollStyle]}
+          scrollEventThrottle={32}
+          style={[{ flex: 1 }, scrollStyle]}
           contentContainerStyle={[contentContainerStyle]}
         >
-          <View style={{ height: topInsetHeight }} />
+          {scrollTopInset > 0 ? <View style={{ height: scrollTopInset }} /> : null}
           {children}
           <View style={{ height: bottomInsetHeight }} />
         </ScrollView>
@@ -57,10 +59,11 @@ export default function FullHeightScrollView({
           // @ts-expect-error -- Scrollview keeps flitting between compat and not
           ScrollViewComponent={ScrollView}
           onScroll={handleScroll}
-          style={[scrollStyle]}
+          scrollEventThrottle={32}
+          style={[{ flex: 1 }, scrollStyle]}
           contentContainerStyle={[contentContainerStyle]}
         >
-          <View style={{ height: topInsetHeight }} />
+          {scrollTopInset > 0 ? <View style={{ height: scrollTopInset }} /> : null}
           {children}
           <View style={{ height: bottomInsetHeight }} />
         </KeyboardAwareScrollView>
