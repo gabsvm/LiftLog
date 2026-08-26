@@ -14,6 +14,7 @@ import {
   setExercisesRequiringWeightMigration,
   setIsHydrated,
   setLatestExercises,
+  setProgressionSessions,
   setRecentExercises,
   setStoredSessions,
   updateExercise,
@@ -84,20 +85,28 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
             cache.sessionCount === sessionCount &&
             cache.recentExercises
           ) {
-            const latestExercises = Object.fromEntries(
-              Object.entries(cache.exercises).map(([key, exercise]) => [
-                key,
-                fromRecordedExerciseJSON(exercise),
-              ]),
+            dispatch(
+              setLatestExercises(
+                Object.fromEntries(
+                  Object.entries(cache.exercises).map(([key, exercise]) => [
+                    key,
+                    fromRecordedExerciseJSON(exercise),
+                  ]),
+                ),
+              ),
             );
-            const recentExercises = Object.fromEntries(
-              Object.entries(cache.recentExercises).map(([key, exercises]) => [
-                key,
-                exercises.map(fromRecordedExerciseJSON),
-              ]),
+            dispatch(
+              setRecentExercises(
+                Object.fromEntries(
+                  Object.entries(cache.recentExercises).map(
+                    ([key, exercises]) => [
+                      key,
+                      exercises.map(fromRecordedExerciseJSON),
+                    ],
+                  ),
+                ),
+              ),
             );
-            dispatch(setLatestExercises(latestExercises));
-            dispatch(setRecentExercises(recentExercises));
             progressionCacheLoaded = true;
           }
         } catch (e) {
@@ -106,20 +115,10 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       }
 
       if (!progressionCacheLoaded) {
-        // One-time fallback for existing installs. Once this cache has been
-        // written, normal startups no longer deserialize the full history just
-        // to calculate the next workout or show recent exercise context.
+        // One-time fallback for existing installs. Build only the progression
+        // derivatives; do not keep the full historical object graph in Redux.
         await logger.time('initializeStoredSessionsFallback', async () => {
-          const completedSessions = (
-            await db.select().from(sessionsSchema)
-          ).reduce(
-            toRecord(
-              (x) => x.id,
-              (row) => Session.fromJSON(row.payload),
-            ),
-            {},
-          );
-          dispatch(setStoredSessions(completedSessions));
+          dispatch(setProgressionSessions(await loadAllSessions(db)));
         });
         await persistProgressionCache(getState(), db, keyValueStore);
       }
@@ -159,9 +158,6 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
       const newBuiltInEntries = Object.entries(builtInExercisesNotAlreadyAdded);
       if (newBuiltInEntries.length > 0) {
-        // The old path dispatched one updateExercise per builtin. On a fresh
-        // install that means hundreds of Redux listener runs and SQLite writes.
-        // Seed all missing builtins with one SQLite statement instead.
         await db
           .insert(exercisesSchema)
           .values(
@@ -192,8 +188,6 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       dispatch(setIsHydrated(true));
       dispatch(fetchUpcomingSessions());
 
-      // The nil-weight compatibility scan walks historical data. Keep it out of
-      // the first usable frame; it can scan SQLite independently of Redux.
       setTimeout(
         () => dispatch(checkIfWeightMigrationRequired()),
         POST_STARTUP_MIGRATION_SCAN_DELAY_MS,
@@ -211,14 +205,12 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       if (getState().storedSessions.isHistoryHydrated) return;
 
       await logger.time('hydrateFullHistory', async () => {
-        const sessions = (await db.select().from(sessionsSchema)).reduce(
-          toRecord(
-            (x) => x.id,
-            (row) => Session.fromJSON(row.payload),
+        const sessions = await loadAllSessions(db);
+        dispatch(
+          setStoredSessions(
+            Object.fromEntries(sessions.map((session) => [session.id, session])),
           ),
-          {},
         );
-        dispatch(setStoredSessions(sessions));
       });
     },
   );
@@ -229,9 +221,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       const state = getState();
       const completedSessionsList = state.storedSessions.isHistoryHydrated
         ? selectSessions(state)
-        : (await db.select().from(sessionsSchema)).map((row) =>
-            Session.fromJSON(row.payload),
-          );
+        : await loadAllSessions(db);
       const migrationsByName = new Map<string, WeightMigrateableExercise>();
 
       for (const session of completedSessionsList) {
@@ -264,9 +254,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       const historyWasHydrated = state.storedSessions.isHistoryHydrated;
       const sessions = historyWasHydrated
         ? selectSessions(state)
-        : (await db.select().from(sessionsSchema)).map((row) =>
-            Session.fromJSON(row.payload),
-          );
+        : await loadAllSessions(db);
       const migrations = state.storedSessions.exercisesRequiringWeightMigration;
       const migrationUnits = new Map(migrations.map((x) => [x.name, x.unit]));
       const applyWeightToSession = (session: Session) =>
@@ -300,9 +288,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       }
       dispatch(upsertStoredSessions(newSessions));
       if (!historyWasHydrated) {
-        dispatch(
-          setStoredSessions(Object.fromEntries(newSessions.map((x) => [x.id, x]))),
-        );
+        dispatch(setProgressionSessions(newSessions));
       }
       dispatch(fetchUpcomingSessions());
       dispatch(setExercisesRequiringWeightMigration([]));
@@ -331,16 +317,21 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
     deleteStoredSession,
     async (
       action,
-      { stateAfterReduce, extra: { logger, db, keyValueStore } },
+      { dispatch, getState, extra: { logger, db, keyValueStore } },
     ) => {
       await logger.time('deleteStoredSession', async () => {
         await db
           .delete(sessionsSchema)
           .where(eq(sessionsSchema.id, action.payload));
       });
-      await persistProgressionCache(stateAfterReduce, db, keyValueStore);
+
+      if (!getState().storedSessions.isHistoryHydrated) {
+        await rebuildProgressionFromDatabase(dispatch, db);
+      }
+      await persistProgressionCache(getState(), db, keyValueStore);
     },
   );
+
   addEffect(
     deleteStoredSession,
     async (
@@ -368,27 +359,32 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       action,
       {
         cancelActiveListeners,
+        dispatch,
+        getState,
         stateAfterReduce,
         extra: { db, logger, keyValueStore },
       },
     ) => {
       cancelActiveListeners();
+      const lazyHistory = !stateAfterReduce.storedSessions.isHistoryHydrated;
+      const replacingPersistedSession =
+        lazyHistory && (await sessionExists(db, action.payload.id));
+
       await logger.time('addStoredSession', async () => {
         const payload = action.payload.toJSON();
         await db
           .insert(sessionsSchema)
-          .values({
-            id: action.payload.id,
-            payload,
-          })
+          .values({ id: action.payload.id, payload })
           .onConflictDoUpdate({
             target: sessionsSchema.id,
-            set: {
-              payload: sql.raw(`excluded.${sessionsSchema.payload.name}`),
-            },
+            set: { payload: sql.raw(`excluded.${sessionsSchema.payload.name}`) },
           });
       });
-      await persistProgressionCache(stateAfterReduce, db, keyValueStore);
+
+      if (replacingPersistedSession) {
+        await rebuildProgressionFromDatabase(dispatch, db);
+      }
+      await persistProgressionCache(getState(), db, keyValueStore);
     },
   );
 
@@ -398,6 +394,8 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       action,
       {
         cancelActiveListeners,
+        dispatch,
+        getState,
         stateAfterReduce,
         extra: { db, logger, keyValueStore },
       },
@@ -414,12 +412,14 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
           .values(toUpsert)
           .onConflictDoUpdate({
             target: sessionsSchema.id,
-            set: {
-              payload: sql.raw(`excluded.${sessionsSchema.payload.name}`),
-            },
+            set: { payload: sql.raw(`excluded.${sessionsSchema.payload.name}`) },
           });
       });
-      await persistProgressionCache(stateAfterReduce, db, keyValueStore);
+
+      if (!stateAfterReduce.storedSessions.isHistoryHydrated) {
+        await rebuildProgressionFromDatabase(dispatch, db);
+      }
+      await persistProgressionCache(getState(), db, keyValueStore);
     },
   );
 
@@ -438,18 +438,14 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       })
       .onConflictDoUpdate({
         target: exercisesSchema.id,
-        set: {
-          payload: sql.raw(`excluded.${exercisesSchema.payload.name}`),
-        },
+        set: { payload: sql.raw(`excluded.${exercisesSchema.payload.name}`) },
       });
   });
 
   addEffect(
     setExercises,
     async (action, { stateAfterReduce, extra: { db } }) => {
-      if (!stateAfterReduce.storedSessions.isHydrated) {
-        return;
-      }
+      if (!stateAfterReduce.storedSessions.isHydrated) return;
       await db.transaction(async (tx) => {
         await tx.delete(exercisesSchema);
         const exerciseRows = Object.entries(action.payload).map(
@@ -464,6 +460,31 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       });
     },
   );
+}
+
+async function loadAllSessions(db: ExpoSQLiteDatabase): Promise<Session[]> {
+  return (await db.select().from(sessionsSchema)).map((row) =>
+    Session.fromJSON(row.payload),
+  );
+}
+
+async function rebuildProgressionFromDatabase(
+  dispatch: (action: ReturnType<typeof setProgressionSessions>) => void,
+  db: ExpoSQLiteDatabase,
+) {
+  dispatch(setProgressionSessions(await loadAllSessions(db)));
+}
+
+async function sessionExists(
+  db: ExpoSQLiteDatabase,
+  sessionId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: sessionsSchema.id })
+    .from(sessionsSchema)
+    .where(eq(sessionsSchema.id, sessionId))
+    .limit(1);
+  return rows.length > 0;
 }
 
 async function getSessionCount(db: ExpoSQLiteDatabase): Promise<number> {
