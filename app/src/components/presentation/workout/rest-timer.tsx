@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ColorChoice, spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Rest } from '@/models/blueprint-models';
 import { Duration, OffsetDateTime } from '@js-joda/core';
 import Svg, { Path } from 'react-native-svg';
-import { Animated, View, ViewStyle } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import Holdable from '@/components/presentation/foundation/holdable';
@@ -35,15 +35,17 @@ export default function RestTimer({
   const getTimerState = useCallback(() => {
     const now = OffsetDateTime.now();
     const diffMs = Duration.between(startTime, now);
+    const elapsedMs = diffMs.toMillis();
     const timeSinceStart = formatTimeSpan(diffMs);
-    const firstProgressBarProgress = failed
-      ? Math.min(diffMs.toMillis() / rest.failureRest.toMillis(), 1)
-      : Math.min(diffMs.toMillis() / rest.minRest.toMillis(), 1);
+    const firstTargetMs = failed
+      ? rest.failureRest.toMillis()
+      : rest.minRest.toMillis();
+    const firstProgressBarProgress = Math.min(elapsedMs / firstTargetMs, 1);
     const secondProgressBarProgress =
       failed || isSameMinMaxRest
         ? -1
         : Math.min(
-            (diffMs.toMillis() - rest.minRest.toMillis()) /
+            (elapsedMs - rest.minRest.toMillis()) /
               (rest.maxRest.toMillis() - rest.minRest.toMillis()),
             1,
           );
@@ -68,7 +70,7 @@ export default function RestTimer({
   const triggerJiggle = useCallback(
     (milestone: string) => {
       if (jiggled.includes(milestone)) return;
-      impactAsync(ImpactFeedbackStyle.Heavy).catch(console.log);
+      void impactAsync(ImpactFeedbackStyle.Heavy).catch(() => undefined);
       setJiggling(true);
       setTimeout(() => setJiggling(false), 10);
       setJiggled((j) => [...j, milestone]);
@@ -83,12 +85,17 @@ export default function RestTimer({
   const pillPerimeter = 2 * straightLength + 2 * Math.PI * radius;
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const update = () => {
       const state = getTimerState();
       setTimerState(state);
-      if (state.firstProgressBarProgress === 1) triggerJiggle('first');
-      if (state.secondProgressBarProgress === 1) triggerJiggle('second');
-    }, 200);
+      if (state.firstProgressBarProgress >= 1) triggerJiggle('first');
+      if (state.secondProgressBarProgress >= 1) triggerJiggle('second');
+    };
+
+    update();
+    // The UI displays whole seconds. Updating at 5 Hz plus starting two JS SVG
+    // animations every tick kept the JS thread busy throughout every rest.
+    const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
   }, [getTimerState, triggerJiggle]);
 
@@ -169,8 +176,6 @@ function formatTimeSpan(ms: Duration): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
 interface PillProgressBarProps {
   color: string;
   progress: number;
@@ -188,31 +193,22 @@ function PillProgressBar({
   pillPerimeter,
   visible = true,
 }: PillProgressBarProps) {
-  const offset = useRef(new Animated.Value(pillPerimeter)).current;
-
-  useEffect(() => {
-    Animated.timing(offset, {
-      toValue: pillPerimeter * (1 - progress),
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, pillPerimeter, offset]);
-
   if (!visible) return null;
 
+  const clampedProgress = Math.max(0, Math.min(progress, 1));
   return (
-    <AnimatedPath
+    <Path
       d={`M${3 + pillHeight / 2 - 3},3
-          h${pillWidth - pillHeight + 0}
+          h${pillWidth - pillHeight}
           a${pillHeight / 2 - 3},${pillHeight / 2 - 3} 0 0 1 0,${pillHeight - 6}
-          h-${pillWidth - pillHeight + 0}
+          h-${pillWidth - pillHeight}
           a${pillHeight / 2 - 3},${pillHeight / 2 - 3} 0 0 1 0,-${pillHeight - 6}
           z`}
       stroke={color}
       strokeWidth={6}
       fill="none"
       strokeDasharray={pillPerimeter}
-      strokeDashoffset={offset}
+      strokeDashoffset={pillPerimeter * (1 - clampedProgress)}
     />
   );
 }
