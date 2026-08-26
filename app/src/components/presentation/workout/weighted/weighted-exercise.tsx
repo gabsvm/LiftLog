@@ -1,7 +1,6 @@
 import PotentialSetCounter from '@/components/presentation/workout/weighted/potential-set-counter';
 import { spacing } from '@/hooks/useAppTheme';
 import { RecordedWeightedExercise } from '@/models/session-models';
-import { useState } from 'react';
 import { View } from 'react-native';
 import ExerciseSection from '@/components/presentation/workout/exercise-section';
 import { OffsetDateTime } from '@js-joda/core';
@@ -14,16 +13,17 @@ interface WeightedExerciseProps {
   showPreviousButton: boolean;
 
   timeProvider: () => OffsetDateTime;
-  updateExercise: (ex: RecordedWeightedExercise) => void;
-  resetSetTimer: () => void;
+  updateExercise: (
+    ex: RecordedWeightedExercise,
+    options?: { resetTimer?: boolean },
+  ) => void;
   onEditExercise: () => void;
   onRemoveExercise: () => void;
 }
 
 export default function WeightedExercise(props: WeightedExerciseProps) {
-  const { updateExercise, timeProvider, resetSetTimer } = props;
+  const { updateExercise, timeProvider } = props;
   const { recordedExercise } = props;
-  useState(false);
 
   const setToStartNext = recordedExercise.potentialSets.findIndex(
     (x) => !x.set,
@@ -36,7 +36,9 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
       toStartNext={props.toStartNext}
       isReadonly={props.isReadonly}
       showPreviousButton={props.showPreviousButton}
-      updateExercise={props.updateExercise}
+      updateExercise={(exercise) =>
+        updateExercise(exercise as RecordedWeightedExercise)
+      }
       onEditExercise={props.onEditExercise}
       onRemoveExercise={props.onRemoveExercise}
     >
@@ -53,12 +55,12 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
                 timeProvider(),
               );
               const newSet = newExercise.getSet(index).set;
-              updateExercise(newExercise);
-              // We only want to reset the timer when switching between unfilled and filled
-              // Otherwise, keep the same time
-              if (!previousSet || !newSet) {
-                resetSetTimer();
-              }
+              // Completing/uncompleting a set and resetting the rest timer must be
+              // one session update. Two Redux updates here caused duplicate
+              // persistence + worker broadcasts on every normal set tap.
+              updateExercise(newExercise, {
+                resetTimer: !previousSet || !newSet,
+              });
             }}
             previousRepCount={
               props.previousRecordedExercises.at(0)?.potentialSets[index]?.set
@@ -67,8 +69,8 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
             onUpdateReps={(reps) => {
               updateExercise(
                 recordedExercise.withRepCount(index, reps, timeProvider()),
+                { resetTimer: true },
               );
-              resetSetTimer();
             }}
             onUpdateWeight={(w, applyTo) =>
               updateExercise(recordedExercise.withWeight(index, w, applyTo))
