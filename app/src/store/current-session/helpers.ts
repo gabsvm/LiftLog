@@ -56,10 +56,11 @@ export function getCardioTimerInfo(
 export function getCurrentExerciseDetails(
   session: Session,
 ): CurrentExerciseDetails | undefined {
-  return session.nextExercise
+  const nextExercise = session.nextExercise;
+  return nextExercise
     ? {
-        exercise: session.nextExercise.toJSON(),
-        setIndex: session.nextExercise.currentSetIndex,
+        exercise: nextExercise.toJSON(),
+        setIndex: nextExercise.currentSetIndex,
       }
     : undefined;
 }
