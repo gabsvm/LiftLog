@@ -7,13 +7,21 @@ export default function ItemList<T>(
   props: {
     items: readonly T[];
     renderItem: (item: T, index: number) => React.ReactNode;
+    keyExtractor?: (item: T, index: number) => string;
     verticalPadding?: boolean;
     empty?: ReactNode;
   } & ViewProps,
 ) {
-  const { items, renderItem, verticalPadding, ...rest } = props;
-  if (!items.length && props.empty) {
-    return props.empty;
+  const {
+    items,
+    renderItem,
+    keyExtractor,
+    verticalPadding,
+    empty,
+    ...rest
+  } = props;
+  if (!items.length && empty) {
+    return empty;
   }
 
   return (
@@ -26,9 +34,9 @@ export default function ItemList<T>(
       testID="item-list"
     >
       {items.map((item, index) => (
-        <Fragment key={index}>
+        <Fragment key={keyExtractor?.(item, index) ?? index}>
           <View>{renderItem(item, index)}</View>
-          {items.length - 1 !== index && <Divider style={{}} />}
+          {items.length - 1 !== index && <Divider />}
         </Fragment>
       ))}
     </View>
