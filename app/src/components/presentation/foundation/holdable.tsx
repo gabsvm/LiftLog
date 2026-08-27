@@ -1,10 +1,6 @@
-import {
-  cancelHaptic,
-  triggerClickHaptic,
-  triggerSlowRiseHaptic,
-} from '~/modules/native-lib/src/ReactNativeHapticsModule';
-import { ReactNode, useRef } from 'react';
-import { Animated, Easing, ViewStyle } from 'react-native';
+import { triggerClickHaptic } from '~/modules/native-lib/src/ReactNativeHapticsModule';
+import { ReactNode } from 'react';
+import { View, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 export type HoldableProps = {
@@ -15,6 +11,14 @@ export type HoldableProps = {
   style?: ViewStyle;
 };
 
+/**
+ * Long-press wrapper for the few controls which genuinely need hold behavior.
+ *
+ * The previous implementation started an animation and a slow-rise haptic on
+ * every pointer-down, even when the interaction ended as a normal tap/scroll.
+ * That forced JS/native work onto the hottest touch path in the workout. Keep
+ * the recognizer native and only cross to JS once a real long press succeeds.
+ */
 export default function Holdable({
   children,
   onLongPress,
@@ -22,30 +26,9 @@ export default function Holdable({
   style,
   disabled,
 }: HoldableProps) {
-  const holdingScale = useRef(new Animated.Value(1)).current;
-
   const handleLongPress = () => {
-    onLongPress();
     triggerClickHaptic();
-  };
-
-  const enterHold = () => {
-    Animated.timing(holdingScale, {
-      toValue: 1.1,
-      duration,
-      easing: Easing.bezier(0.21, 0.95, 0.67, 0.28),
-      useNativeDriver: true,
-    }).start();
-    triggerSlowRiseHaptic();
-  };
-
-  const exitHold = (triggered: boolean) => {
-    Animated.timing(holdingScale, {
-      toValue: 1,
-      duration,
-      useNativeDriver: true,
-    }).start();
-    if (!triggered) cancelHaptic();
+    onLongPress();
   };
 
   const gesture = disabled
@@ -53,15 +36,11 @@ export default function Holdable({
     : Gesture.LongPress()
         .minDuration(duration)
         .runOnJS(true)
-        .onBegin(enterHold)
-        .onFinalize((_, triggered) => exitHold(triggered))
         .onStart(handleLongPress);
 
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[style, { transform: [{ scale: holdingScale }] }]}>
-        {children}
-      </Animated.View>
+      <View style={style}>{children}</View>
     </GestureDetector>
   );
 }
