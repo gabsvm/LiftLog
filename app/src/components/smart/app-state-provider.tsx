@@ -1,11 +1,10 @@
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useAppSelector } from '@/store';
-import { initializeAppStateSlice } from '@/store/app';
-import { setIsHydrated as setCurrentSessionHydrated } from '@/store/current-session';
-import { setIsHydrated as setSettingsHydrated } from '@/store/settings';
-import { setIsHydrated as setProgramHydrated } from '@/store/program';
-import { setIsHydrated as setStoredSessionsHydrated } from '@/store/stored-sessions';
-import { setIsHydrated as setAiPlannerHydrated } from '@/store/ai-planner';
+import {
+  copyLogs,
+  initializeAppStateSlice,
+  setInitializationError,
+} from '@/store/app';
 import { T } from '@tolgee/react';
 import { ReactNode, useEffect } from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
@@ -16,6 +15,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const dispatch = useDispatch();
+  const appIsHydrated = useAppSelector((state) => state.app.isHydrated);
   const initializationError = useAppSelector(
     (state) => state.app.initializationError,
   );
@@ -31,15 +31,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isWaiting || initializationError) return;
+
+    // Never manufacture a "hydrated" state just to escape the splash. If a
+    // critical slice stalls, surface a recoverable error instead. Database
+    // preparation gets a longer window; once it is ready, the remaining local
+    // state hydration should complete quickly.
+    const timeoutMs = appIsHydrated ? 15_000 : 35_000;
     const timeout = setTimeout(() => {
-      dispatch(setCurrentSessionHydrated(true));
-      dispatch(setSettingsHydrated(true));
-      dispatch(setProgramHydrated(true));
-      dispatch(setStoredSessionsHydrated(true));
-      dispatch(setAiPlannerHydrated(true));
-    }, 8_000);
+      dispatch(
+        setInitializationError(
+          'GainsLab could not finish loading your training state.',
+        ),
+      );
+    }, timeoutMs);
     return () => clearTimeout(timeout);
-  }, [dispatch, initializationError, isWaiting]);
+  }, [appIsHydrated, dispatch, initializationError, isWaiting]);
 
   useEffect(() => {
     let secondFrame: number | undefined;
@@ -68,6 +74,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       <GainsLabStartupError
         message={initializationError}
         onRetry={() => dispatch(initializeAppStateSlice())}
+        onCopyLogs={() => dispatch(copyLogs())}
       />
     );
   }
@@ -159,9 +166,11 @@ function GainsLabStartup() {
 function GainsLabStartupError({
   message,
   onRetry,
+  onCopyLogs,
 }: {
   message: string;
   onRetry: () => void;
+  onCopyLogs: () => void;
 }) {
   const { colors } = useAppTheme();
 
@@ -175,9 +184,14 @@ function GainsLabStartupError({
         >
           {message}
         </Text>
-        <Button mode="contained" onPress={onRetry} style={{ minWidth: 160 }}>
-          <T keyName="generic.retry.button" />
-        </Button>
+        <View style={{ width: '100%', gap: 10 }}>
+          <Button mode="contained" onPress={onRetry}>
+            <T keyName="generic.retry.button" />
+          </Button>
+          <Button mode="outlined" onPress={onCopyLogs}>
+            Copy logs
+          </Button>
+        </View>
       </View>
     </StartupShell>
   );
