@@ -1,5 +1,6 @@
-import { uuid } from '@/utils/uuid';
 import { File, Paths } from 'expo-file-system';
+
+let tempFileSequence = 0;
 
 export class KeyValueStore {
   async getItem(key: string): Promise<string | undefined> {
@@ -19,10 +20,11 @@ export class KeyValueStore {
   }
 
   async setItem(key: string, value: string | Uint8Array): Promise<void> {
-    // We do this tempfile business to catch if the app crashes halfway through a write, don't want to corrupt the existing data.
-    // Originally I found that if the value was < the original file length then it kept the old files extra data -corrupting it.
-    // Could just delete it, but this feels like less chance of data loss
-    const tempFile = getFile(key + '-tmp' + uuid());
+    // Write to a unique temporary file first so an interrupted write cannot
+    // corrupt the previous value. Temp filenames do not need cryptographic
+    // UUIDs; timestamp + process-local sequence is enough and keeps ordinary
+    // preference persistence independent from the crypto subsystem.
+    const tempFile = getTempFile(key);
     const finalFile = getFile(key);
     tempFile.create();
 
@@ -65,6 +67,13 @@ export class KeyValueStore {
   private async readBytes(file: File): Promise<Uint8Array> {
     return file.bytes();
   }
+}
+
+function getTempFile(key: string): File {
+  tempFileSequence = (tempFileSequence + 1) % Number.MAX_SAFE_INTEGER;
+  return getFile(
+    `${key}-tmp-${Date.now().toString(36)}-${tempFileSequence.toString(36)}`,
+  );
 }
 
 function getFile(key: string): File {
