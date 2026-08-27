@@ -46,7 +46,7 @@ export default function FullHeightScrollView({
       {!avoidKeyboard ? (
         <ScrollView
           onScroll={handleScroll}
-          scrollEventThrottle={32}
+          scrollEventThrottle={64}
           style={[{ flex: 1 }, scrollStyle]}
           contentContainerStyle={[contentContainerStyle]}
         >
@@ -59,7 +59,7 @@ export default function FullHeightScrollView({
           // @ts-expect-error -- Scrollview keeps flitting between compat and not
           ScrollViewComponent={ScrollView}
           onScroll={handleScroll}
-          scrollEventThrottle={32}
+          scrollEventThrottle={64}
           style={[{ flex: 1 }, scrollStyle]}
           contentContainerStyle={[contentContainerStyle]}
         >
