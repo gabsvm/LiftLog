@@ -26,6 +26,7 @@ const RECENT_EXERCISES_PER_NAME = 10;
 interface StoredSessionState {
   isHydrated: boolean;
   isHistoryHydrated: boolean;
+  isExercisesHydrated: boolean;
   sessions: Record<string, Session>;
   latestExercises: Record<string, RecordedExercise | undefined>;
   recentExercises: Record<NormalizedNameKey, RecordedExercise[]>;
@@ -39,6 +40,7 @@ interface StoredSessionState {
 const initialState: StoredSessionState = {
   isHydrated: false,
   isHistoryHydrated: false,
+  isExercisesHydrated: false,
   sessions: {},
   latestExercises: {},
   recentExercises: {},
@@ -112,9 +114,14 @@ const storedSessionsSlice = createSlice({
       const deletedSession = state.sessions[action.payload];
       delete state.sessions[action.payload];
       if (!deletedSession) return;
-      if (state.isHistoryHydrated) {
-        rebuildDerivatives(state);
-      }
+      if (state.isHistoryHydrated) rebuildDerivatives(state);
+    },
+    hydrateExercises(
+      state,
+      action: PayloadAction<Record<string, ExerciseDescriptor>>,
+    ) {
+      state.savedExercises = action.payload;
+      state.isExercisesHydrated = true;
     },
     updateExercise(
       state,
@@ -130,6 +137,7 @@ const storedSessionsSlice = createSlice({
       action: PayloadAction<Record<string, ExerciseDescriptor>>,
     ) {
       state.savedExercises = action.payload;
+      state.isExercisesHydrated = true;
     },
     setFilteredExerciseIds(state, action: PayloadAction<string[]>) {
       state.filteredExerciseIds = action.payload;
@@ -157,6 +165,8 @@ const storedSessionsSlice = createSlice({
       state.latestNonFreeformSession,
     selectIsHistoryHydrated: (state: StoredSessionState) =>
       state.isHistoryHydrated,
+    selectIsExercisesHydrated: (state: StoredSessionState) =>
+      state.isExercisesHydrated,
     selectSessions: createSelector(
       [(state: StoredSessionState) => state.sessions],
       (sessions) => Object.values(sessions),
@@ -278,6 +288,7 @@ export const initializeStoredSessionsStateSlice = createAction(
   'initializeStoredSessionsStateSlice',
 );
 export const ensureHistoryHydrated = createAction('ensureHistoryHydrated');
+export const ensureExercisesHydrated = createAction('ensureExercisesHydrated');
 export const migrateExerciseWeights = createAction('migrateExerciseWeights');
 export const checkIfWeightMigrationRequired = createAction(
   'checkIfWeightMigrationRequired',
@@ -290,6 +301,7 @@ export const {
   setLatestNonFreeformSession,
   setProgressionSessions,
   setStoredSessions,
+  hydrateExercises,
   upsertStoredSessions,
   addStoredSession,
   deleteStoredSession,
@@ -309,6 +321,7 @@ export const {
   selectRecentExercises,
   selectLatestNonFreeformSession,
   selectIsHistoryHydrated,
+  selectIsExercisesHydrated,
   selectExerciseById,
 } = storedSessionsSlice.selectors;
 
@@ -368,9 +381,7 @@ export const selectSessionsInMonth = createSelector(
 export const selectMuscles = createSelector([selectExercises], (exercises) => {
   const muscles = new Set<string>();
   for (const exercise of Object.values(exercises)) {
-    for (const muscle of exercise.muscles) {
-      muscles.add(muscle);
-    }
+    for (const muscle of exercise.muscles) muscles.add(muscle);
   }
   return [...muscles].sort();
 });
