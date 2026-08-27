@@ -4,8 +4,13 @@ type CryptoLike = {
   getRandomValues?: (array: Uint8Array) => Uint8Array;
 };
 
+type RandomBytesFn = (size: number) => Uint8Array;
+
 type QuickCryptoModule = {
-  randomBytes: (size: number) => Uint8Array;
+  randomBytes?: RandomBytesFn;
+  default?: {
+    randomBytes?: RandomBytesFn;
+  };
 };
 
 function randomBytes(size: number): Uint8Array {
@@ -25,7 +30,14 @@ function randomBytes(size: number): Uint8Array {
   // when an UUID is actually requested.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const quickCrypto = require('react-native-quick-crypto') as QuickCryptoModule;
-  bytes.set(quickCrypto.randomBytes(size));
+  const nativeRandomBytes =
+    quickCrypto.randomBytes ?? quickCrypto.default?.randomBytes;
+
+  if (!nativeRandomBytes) {
+    throw new Error('No secure random byte generator is available');
+  }
+
+  bytes.set(nativeRandomBytes(size));
   return bytes;
 }
 
