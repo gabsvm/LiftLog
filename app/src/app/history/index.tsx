@@ -181,6 +181,7 @@ export default function History() {
             <CardList
               testID="history-list"
               items={sessionsInMonth}
+              keySelector={(session) => session.id}
               cardType="contained"
               onPress={onSelectSession}
               renderItemContent={(session) => (
@@ -245,39 +246,43 @@ export default function History() {
         )}
       </FullHeightScrollView>
 
-      <ConfirmationDialog
-        headline={t('workout.replace_current.confirm.title')}
-        textContent={t('workout.replace_in_progress.confirm.body')}
-        open={replaceCurrentSessionConfirmOpen}
-        okText={t('generic.replace.button')}
-        onOk={() => selectedWorkout && startWorkout(selectedWorkout, true)}
-        onCancel={() => {
-          setSelectedWorkout(undefined);
-          setReplaceCurrentSessionConfirmOpen(false);
-        }}
-      />
-      <ConfirmationDialog
-        headline={t('workout.delete.confirm.title')}
-        textContent={
-          <LimitedHtml
-            value={t('workout.delete.confirm.body', {
-              sessionName: selectedWorkout?.blueprint.name ?? '',
-              date: formatDate(selectedWorkout?.date ?? LocalDate.now(), {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              }),
-            })}
-          />
-        }
-        open={deleteSelectedWorkoutConfirmOpen}
-        okText={t('generic.delete.button')}
-        onOk={() => selectedWorkout && deleteWorkout(selectedWorkout, true)}
-        onCancel={() => {
-          setSelectedWorkout(undefined);
-          setDeleteSelectedWorkoutConfirmOpen(false);
-        }}
-      />
+      {replaceCurrentSessionConfirmOpen ? (
+        <ConfirmationDialog
+          headline={t('workout.replace_current.confirm.title')}
+          textContent={t('workout.replace_in_progress.confirm.body')}
+          open
+          okText={t('generic.replace.button')}
+          onOk={() => selectedWorkout && startWorkout(selectedWorkout, true)}
+          onCancel={() => {
+            setSelectedWorkout(undefined);
+            setReplaceCurrentSessionConfirmOpen(false);
+          }}
+        />
+      ) : null}
+      {deleteSelectedWorkoutConfirmOpen ? (
+        <ConfirmationDialog
+          headline={t('workout.delete.confirm.title')}
+          textContent={
+            <LimitedHtml
+              value={t('workout.delete.confirm.body', {
+                sessionName: selectedWorkout?.blueprint.name ?? '',
+                date: formatDate(selectedWorkout?.date ?? LocalDate.now(), {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }),
+              })}
+            />
+          }
+          open
+          okText={t('generic.delete.button')}
+          onOk={() => selectedWorkout && deleteWorkout(selectedWorkout, true)}
+          onCancel={() => {
+            setSelectedWorkout(undefined);
+            setDeleteSelectedWorkoutConfirmOpen(false);
+          }}
+        />
+      ) : null}
     </>
   );
 }
