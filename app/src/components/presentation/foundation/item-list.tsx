@@ -12,16 +12,9 @@ export default function ItemList<T>(
     empty?: ReactNode;
   } & ViewProps,
 ) {
-  const {
-    items,
-    renderItem,
-    keyExtractor,
-    verticalPadding,
-    empty,
-    ...rest
-  } = props;
-  if (!items.length && empty) {
-    return empty;
+  const { items, renderItem, keyExtractor, verticalPadding, ...rest } = props;
+  if (!items.length && props.empty) {
+    return props.empty;
   }
 
   return (
@@ -34,9 +27,9 @@ export default function ItemList<T>(
       testID="item-list"
     >
       {items.map((item, index) => (
-        <Fragment key={keyExtractor?.(item, index) ?? index}>
+        <Fragment key={keyExtractor?.(item, index) ?? String(index)}>
           <View>{renderItem(item, index)}</View>
-          {items.length - 1 !== index && <Divider />}
+          {items.length - 1 !== index && <Divider style={{}} />}
         </Fragment>
       ))}
     </View>
