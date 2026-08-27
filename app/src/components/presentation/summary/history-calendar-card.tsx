@@ -8,7 +8,7 @@ import { I18nManager, View } from 'react-native';
 import { Card } from 'react-native-paper';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import TouchableRipple from '@/components/presentation/foundation/gesture-wrappers/touchable-ripple';
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { useFormatDate } from '@/hooks/useFormatDate';
 
 interface HistoryCalendarCardProps {
@@ -33,6 +33,7 @@ export default function HistoryCalendarCard({
     currentYearMonth.month(),
     1,
   );
+  const today = LocalDate.now();
   const formatDate = useFormatDate();
   const dayOfFirstDayOfTheMonth = firstDayOfMonth.dayOfWeek().value();
   const firstDayOfWeek = useAppSelector((x) => x.settings.firstDayOfWeek);
@@ -46,16 +47,19 @@ export default function HistoryCalendarCard({
     7;
   const disableNextMonth = currentYearMonth.equals(YearMonth.now());
 
-  const sessionsByDate = new Map<string, Session[]>();
-  for (const session of sessions) {
-    const dateKey = session.date.toString();
-    const sessionsForDate = sessionsByDate.get(dateKey);
-    if (sessionsForDate) {
-      sessionsForDate.push(session);
-    } else {
-      sessionsByDate.set(dateKey, [session]);
+  const sessionsByDate = useMemo(() => {
+    const grouped = new Map<string, Session[]>();
+    for (const session of sessions) {
+      const dateKey = session.date.toString();
+      const sessionsForDate = grouped.get(dateKey);
+      if (sessionsForDate) {
+        sessionsForDate.push(session);
+      } else {
+        grouped.set(dateKey, [session]);
+      }
     }
-  }
+    return grouped;
+  }, [sessions]);
 
   const previousMonth = () => onMonthChange(currentYearMonth.minusMonths(1));
   const nextMonth = () => onMonthChange(currentYearMonth.plusMonths(1));
@@ -132,53 +136,33 @@ export default function HistoryCalendarCard({
     </ForceLTRRow>
   );
 
+  const renderDay = (date: LocalDate) => (
+    <HistoryCalendarDay
+      key={date.toString()}
+      sessions={sessionsByDate.get(date.toString()) ?? []}
+      day={date}
+      today={today}
+      onPress={() => handleDayPress(date)}
+      onLongPress={() => handleDayLongPress(date)}
+    />
+  );
+
   const daysFromPreviousMonth = Array.from(
     { length: numberOfDaysToShowFromPreviousMonth },
     (_, offset) => {
       offset = offset - numberOfDaysToShowFromPreviousMonth;
-      const date = firstDayOfMonth.plusDays(offset);
-      return (
-        <HistoryCalendarDay
-          key={date.toString()}
-          sessions={sessionsByDate.get(date.toString()) ?? []}
-          day={date}
-          onPress={() => handleDayPress(date)}
-          onLongPress={() => handleDayLongPress(date)}
-        />
-      );
+      return renderDay(firstDayOfMonth.plusDays(offset));
     },
   );
 
   const daysInMonth = Array.from(
     { length: firstDayOfMonth.lengthOfMonth() },
-    (_, i) => {
-      const date = firstDayOfMonth.withDayOfMonth(i + 1);
-      return (
-        <HistoryCalendarDay
-          key={date.toString()}
-          sessions={sessionsByDate.get(date.toString()) ?? []}
-          day={date}
-          onPress={() => handleDayPress(date)}
-          onLongPress={() => handleDayLongPress(date)}
-        />
-      );
-    },
+    (_, i) => renderDay(firstDayOfMonth.withDayOfMonth(i + 1)),
   );
 
   const daysFromNextMonth = Array.from(
     { length: numberOfDaysToShowFromNextMonth },
-    (_, i) => {
-      const date = firstDayOfMonth.plusMonths(1).withDayOfMonth(i + 1);
-      return (
-        <HistoryCalendarDay
-          key={date.toString()}
-          sessions={sessionsByDate.get(date.toString()) ?? []}
-          day={date}
-          onPress={() => handleDayPress(date)}
-          onLongPress={() => handleDayLongPress(date)}
-        />
-      );
-    },
+    (_, i) => renderDay(firstDayOfMonth.plusMonths(1).withDayOfMonth(i + 1)),
   );
 
   const daysInSections = [daysFromPreviousMonth, daysInMonth, daysFromNextMonth]
@@ -211,14 +195,14 @@ export default function HistoryCalendarCard({
 
 function HistoryCalendarDay(props: {
   day: LocalDate;
+  today: LocalDate;
   sessions: Session[];
   onPress: () => void;
   onLongPress: () => void;
 }) {
-  const isFuture = props.day.isAfter(LocalDate.now());
+  const isFuture = props.day.isAfter(props.today);
   const hasSessions = props.sessions.length > 0;
-  const isTodayWithNoSessions =
-    props.day.equals(LocalDate.now()) && !hasSessions;
+  const isTodayWithNoSessions = props.day.equals(props.today) && !hasSessions;
   const { colors } = useAppTheme();
   const formatDate = useFormatDate();
 
