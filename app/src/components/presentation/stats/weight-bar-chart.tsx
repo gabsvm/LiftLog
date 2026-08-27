@@ -3,7 +3,7 @@ import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
 import { BarChart, barDataItem } from 'react-native-gifted-charts';
 import { View } from 'react-native';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { verticalBarChartProps } from '@/components/presentation/stats/line-graph-props';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { Text } from 'react-native-paper';
@@ -17,28 +17,38 @@ export function WeightBarChart({
   const weightUnit = usePreferredWeightUnit();
   const { colors } = useAppTheme();
   const charWidth = 5;
-  const points: barDataItem[] = statistics.map((stat): barDataItem => {
-    const topLabelText = stat.value.shortLocaleFormat(0);
-    return {
-      value: stat.value.convertTo(weightUnit).value.toNumber(),
-      barWidth: charWidth * (topLabelText.length + 3),
-      topLabelComponent: () => (
-        <Text
-          style={{ width: 200, textAlign: 'center', pointerEvents: 'none' }}
-        >
-          {topLabelText}
-        </Text>
-      ),
-
-      label: formatDate(stat.dateTime.toLocalDate(), {
-        day: 'numeric',
-        month: 'short',
+  const points = useMemo<barDataItem[]>(
+    () =>
+      statistics.map((stat): barDataItem => {
+        const topLabelText = stat.value.shortLocaleFormat(0);
+        return {
+          value: stat.value.convertTo(weightUnit).value.toNumber(),
+          barWidth: charWidth * (topLabelText.length + 3),
+          topLabelComponent: () => (
+            <Text
+              style={{ width: 200, textAlign: 'center', pointerEvents: 'none' }}
+            >
+              {topLabelText}
+            </Text>
+          ),
+          label: formatDate(stat.dateTime.toLocalDate(), {
+            day: 'numeric',
+            month: 'short',
+          }),
+        };
       }),
-    };
-  });
+    [formatDate, statistics, weightUnit],
+  );
   const [width, setWidth] = useState(0);
   return (
-    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      onLayout={(e) => {
+        const nextWidth = e.nativeEvent.layout.width;
+        setWidth((currentWidth) =>
+          currentWidth === nextWidth ? currentWidth : nextWidth,
+        );
+      }}
+    >
       <BarChart
         {...verticalBarChartProps(colors, width)}
         negativeStepValue={
