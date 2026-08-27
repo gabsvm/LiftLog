@@ -49,6 +49,7 @@ function resolveServicesInternal(
     db,
     logger,
     new DatabaseImportService(db, keyValueStore, preferenceService),
+    keyValueStore,
   );
 
   let notificationService: NotificationService | undefined;
