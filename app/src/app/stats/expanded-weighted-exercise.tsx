@@ -18,8 +18,8 @@ import {
 import { T, useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router/build/hooks';
-import { ReactNode, useEffect } from 'react';
-import { View } from 'react-native';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
+import { InteractionManager, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 
@@ -28,9 +28,11 @@ export default function ExpandedExercisePage() {
   const timePeriod = useAppSelector((x) => x.stats.overallViewTime);
   const { exerciseName } = useLocalSearchParams<{ exerciseName: string }>();
   const { dismissTo } = useRouter();
-  useFocusEffect(() => {
-    dispatch(fetchOverallStats());
-  });
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchOverallStats());
+    }, [dispatch]),
+  );
   useEffect(() => {
     if (!exerciseName) {
       dismissTo('/stats');
@@ -74,24 +76,38 @@ function LoadedStats({
 
 function LoadedStatsFilled({ stats }: { stats: WeightedExerciseStatistics }) {
   const { t } = useTranslate();
+  const [showCharts, setShowCharts] = useState(false);
+
+  useEffect(() => {
+    setShowCharts(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      setShowCharts(true);
+    });
+    return () => task.cancel();
+  }, [stats]);
+
   return (
     <View style={{ gap: spacing[4] }}>
       <OverallStatsGrid stats={stats} />
-      <StatCardWithTitle title={t('stats.exercise.max_weight.title')}>
-        <WeightLineChart statistics={stats.maxLiftedPerSessionStatistics} />
-      </StatCardWithTitle>
-      <StatCardWithTitle title={t('stats.exercise.1rm_progress.title')}>
-        <WeightLineChart statistics={stats.max1RMPerSessionStatistics} />
-      </StatCardWithTitle>
-      <StatCardWithTitle title={t('stats.exercise.volume_per_workout.title')}>
-        <WeightBarChart statistics={stats.totalVolumeStatistics} />
-      </StatCardWithTitle>
-      <StatCardWithTitle title={t('stats.exercise.reps_breakdown.title')}>
-        <RepsBarChart statistics={stats.repsStatistics} />
-        <Text style={{ textAlign: 'center' }}>
-          {t('stats.exercise.reps_breakdown_sets_x_axis.label')}
-        </Text>
-      </StatCardWithTitle>
+      {showCharts ? (
+        <>
+          <StatCardWithTitle title={t('stats.exercise.max_weight.title')}>
+            <WeightLineChart statistics={stats.maxLiftedPerSessionStatistics} />
+          </StatCardWithTitle>
+          <StatCardWithTitle title={t('stats.exercise.1rm_progress.title')}>
+            <WeightLineChart statistics={stats.max1RMPerSessionStatistics} />
+          </StatCardWithTitle>
+          <StatCardWithTitle title={t('stats.exercise.volume_per_workout.title')}>
+            <WeightBarChart statistics={stats.totalVolumeStatistics} />
+          </StatCardWithTitle>
+          <StatCardWithTitle title={t('stats.exercise.reps_breakdown.title')}>
+            <RepsBarChart statistics={stats.repsStatistics} />
+            <Text style={{ textAlign: 'center' }}>
+              {t('stats.exercise.reps_breakdown_sets_x_axis.label')}
+            </Text>
+          </StatCardWithTitle>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -106,7 +122,7 @@ function StatCardWithTitle(props: { title: string; children: ReactNode }) {
           backgroundColor: colors.surfaceContainer,
         }}
       >
-        <Card.Content style={{ paddingVertical: spacing[8] }}>
+        <Card.Content style={{ paddingVertical: spacing[5] }}>
           {props.children}
         </Card.Content>
       </Card>
