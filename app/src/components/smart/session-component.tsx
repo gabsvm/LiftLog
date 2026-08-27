@@ -112,6 +112,7 @@ export default function SessionComponent(props: {
     ExerciseBlueprint | undefined
   >(undefined);
   const [exerciseEditorOpen, setExerciseEditorOpen] = useState(false);
+  const [sessionNotesExpanded, setSessionNotesExpanded] = useState(false);
 
   const beginEditExercise = useCallback(
     (index: number, blueprint: ExerciseBlueprint) => {
@@ -154,6 +155,7 @@ export default function SessionComponent(props: {
   const notesComponent = session.blueprint.notes ? (
     <Card
       mode="contained"
+      onPress={() => setSessionNotesExpanded((expanded) => !expanded)}
       style={{
         marginVertical: spacing[2],
         marginHorizontal: spacing.pageHorizontalMargin,
@@ -161,15 +163,37 @@ export default function SessionComponent(props: {
     >
       <Card.Content
         style={{
-          gap: spacing[4],
+          minHeight: sessionNotesExpanded ? undefined : 42,
+          gap: spacing[2],
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: sessionNotesExpanded ? 'flex-start' : 'center',
+          paddingVertical: sessionNotesExpanded ? spacing[3] : spacing[1],
+          paddingHorizontal: spacing[3],
         }}
       >
-        <Icon source={'text'} size={20} />
-        <View style={{ paddingRight: spacing[2] }}>
-          <SurfaceText>{session.blueprint.notes}</SurfaceText>
+        <View style={{ paddingTop: sessionNotesExpanded ? 2 : 0 }}>
+          <Icon
+            source={sessionNotesExpanded ? 'unfoldLess' : 'text'}
+            size={18}
+            color={colors.onSurfaceVariant}
+          />
         </View>
+        <View style={{ flex: 1 }}>
+          {sessionNotesExpanded ? (
+            <SurfaceText>{session.blueprint.notes}</SurfaceText>
+          ) : (
+            <Text
+              variant="bodySmall"
+              numberOfLines={1}
+              style={{ color: colors.onSurfaceVariant }}
+            >
+              {session.blueprint.notes}
+            </Text>
+          )}
+        </View>
+        {!sessionNotesExpanded ? (
+          <Icon source="unfoldMore" size={18} color={colors.onSurfaceVariant} />
+        ) : null}
       </Card.Content>
     </Card>
   ) : null;
@@ -333,29 +357,31 @@ export default function SessionComponent(props: {
       />
       {bodyweight}
       {workoutSummary}
-      <FullScreenDialog
-        avoidKeyboard
-        title={
-          exerciseToEditIndex === undefined
-            ? t('exercise.add.title')
-            : t('exercise.edit.title')
-        }
-        action={
-          exerciseToEditIndex === undefined
-            ? t('generic.add.button')
-            : t('generic.update.button')
-        }
-        open={exerciseEditorOpen}
-        onAction={handleEditExercise}
-        onClose={() => setExerciseEditorOpen(false)}
-      >
-        {editingExerciseBlueprint ? (
-          <ExerciseEditor
-            exercise={editingExerciseBlueprint}
-            updateExercise={setEditingExerciseBlueprint}
-          />
-        ) : null}
-      </FullScreenDialog>
+      {exerciseEditorOpen ? (
+        <FullScreenDialog
+          avoidKeyboard
+          title={
+            exerciseToEditIndex === undefined
+              ? t('exercise.add.title')
+              : t('exercise.edit.title')
+          }
+          action={
+            exerciseToEditIndex === undefined
+              ? t('generic.add.button')
+              : t('generic.update.button')
+          }
+          open
+          onAction={handleEditExercise}
+          onClose={() => setExerciseEditorOpen(false)}
+        >
+          {editingExerciseBlueprint ? (
+            <ExerciseEditor
+              exercise={editingExerciseBlueprint}
+              updateExercise={setEditingExerciseBlueprint}
+            />
+          ) : null}
+        </FullScreenDialog>
+      ) : null}
     </FullHeightScrollView>
   );
 }
@@ -533,7 +559,11 @@ function buildSupersetVisuals(
 
     const groupName = getSupersetGroupName(groupIndex);
     groupIndex += 1;
-    for (let groupExerciseIndex = index; groupExerciseIndex <= endIndex; groupExerciseIndex += 1) {
+    for (
+      let groupExerciseIndex = index;
+      groupExerciseIndex <= endIndex;
+      groupExerciseIndex += 1
+    ) {
       visuals[groupExerciseIndex] = {
         label: `${groupName}${groupExerciseIndex - index + 1}`,
         connectBefore: groupExerciseIndex > index,
