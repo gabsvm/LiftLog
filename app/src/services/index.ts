@@ -11,7 +11,6 @@ import type { StringSharer } from '@/services/string-sharer';
 import { KeyValueStore } from '@/services/key-value-store';
 import { Logger } from '@/services/logger';
 import { PreferenceService } from '@/services/preference-service';
-import { ProgressRepository } from '@/services/progress-repository';
 import { SessionService } from '@/services/session-service';
 import { getTolgee } from '@/services/tolgee';
 import { WorkoutWorker } from '@/services/workout-worker';
@@ -38,8 +37,7 @@ function resolveServicesInternal(
 
   const logger = new Logger();
   const keyValueStore = new KeyValueStore();
-  const progressRepository = new ProgressRepository(store.getState);
-  const sessionService = new SessionService(progressRepository, store.getState);
+  const sessionService = new SessionService(keyValueStore, db, store.getState);
   const preferenceService = new PreferenceService(keyValueStore);
   const tolgee = getTolgee(preferenceService);
   const workoutWorkerService = new WorkoutWorker(
@@ -67,7 +65,6 @@ function resolveServicesInternal(
 
   const getEncryptionService = (): EncryptionService => {
     if (!encryptionService) {
-      // Keep QuickCrypto and its JSI setup out of normal app startup.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { EncryptionService: Service } = require('./encryption-service') as typeof import('./encryption-service');
       encryptionService = new Service();
@@ -87,7 +84,6 @@ function resolveServicesInternal(
   return {
     logger,
     keyValueStore,
-    progressRepository,
     sessionService,
     preferenceService,
     workoutWorkerService,
@@ -173,10 +169,7 @@ function resolveServicesInternal(
         const { AiChatService: Service } = require('./ai-chat-service') as typeof import('./ai-chat-service');
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { HubConnectionFactory } = require('./hub-connection-factory') as typeof import('./hub-connection-factory');
-        aiChatService = new Service(
-          new HubConnectionFactory(),
-          store.getState,
-        );
+        aiChatService = new Service(new HubConnectionFactory(), store.getState);
       }
       return aiChatService;
     },
