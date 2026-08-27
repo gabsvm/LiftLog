@@ -68,12 +68,21 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
         cancelActiveListeners,
         getState,
         dispatch,
-        extra: { db, logger, encryptionService },
+        extra: {
+          db,
+          logger,
+          encryptionService,
+          databaseMigrationService,
+        },
       },
     ) => {
       cancelActiveListeners();
       const sw = performance.now();
       try {
+        // Feed is lazy in GainsLab, so keep its JSON migrations on the same
+        // on-demand path instead of making them compete with Home startup.
+        await databaseMigrationService.migrateFeedData();
+
         const identity = (await db.select().from(feedIdentitySchema)).at(0);
         dispatch(
           patchFeedState({
@@ -323,8 +332,8 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
       action,
       { dispatch, stateAfterReduce, extra: { feedIdentityService } },
     ) => {
+      cancelActiveListeners;
       const identityRemote = selectFeedIdentityRemote(stateAfterReduce);
-
       const result = await identityRemote
         .map((i) => feedIdentityService.deleteFeedIdentityAsync(i))
         .unwrapOr(Promise.resolve(ApiResult.success()));
@@ -382,7 +391,6 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
         return;
       }
       const identity = feedIdentityRemote.data;
-      // We optimistically updated the identity, so now we can just use its values
       const result = await feedIdentityService.updateFeedIdentityAsync(
         identity.id,
         identity.lookup,
@@ -400,7 +408,6 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
       if (signal.aborted) {
         return;
       }
-
       if (result.isError()) {
         if (result.error.type === ApiErrorType.NotFound) {
           dispatch(
@@ -420,7 +427,6 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
         dispatch(setIdentity(oldFeedIdentity));
         return;
       }
-
       dispatch(setIdentity(RemoteData.success(result.data!)));
     },
   );
@@ -431,8 +437,6 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
   addFollowingEffects(addEffect);
 }
 
-// There was a period of time where we generated bad keys on IOS
-// We can remove this code after December 2026
 async function fixIosBadRSAKey(
   getState: () => RootState,
   dispatch: Dispatch,
