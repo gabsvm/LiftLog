@@ -6,8 +6,10 @@ import { ExerciseBlueprint } from '@/models/blueprint-models';
 import { ExerciseDescriptor } from '@/models/exercise-models';
 import { useAppSelector, useAppSelectorWithArg } from '@/store';
 import {
+  ensureExercisesHydrated,
   selectExerciseById,
   selectExerciseIds,
+  selectIsExercisesHydrated,
   updateExercise,
 } from '@/store/stored-sessions';
 import { uuid } from '@/utils/uuid';
@@ -15,9 +17,9 @@ import BottomSheet, {
   useBottomSheetScrollableCreator,
 } from '@gorhom/bottom-sheet';
 import { LegendList } from '@legendapp/list';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, View } from 'react-native';
-import { List } from 'react-native-paper';
+import { ActivityIndicator, List } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 
 interface ExerciseSearcherProps {
@@ -29,14 +31,22 @@ export function ExerciseSearcher({
   currentExercise,
   onSelectExercise,
 }: ExerciseSearcherProps) {
+  const dispatch = useDispatch();
   const [open, setOpen] = useState(false);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const BottomSheetScrollView = useBottomSheetScrollableCreator();
+  const exercisesHydrated = useAppSelector(selectIsExercisesHydrated);
   const exerciseIds = useAppSelector(selectExerciseIds);
-  const [filteredExerciseIds, setFilteredExerciseIds] = useState(exerciseIds);
+  const [filteredExerciseIds, setFilteredExerciseIds] = useState<string[]>([]);
   const [suggestedNewExercise, setSuggestedNewExercise] = useState<
     ExerciseDescriptor | 'NONE'
   >('NONE');
+
+  useEffect(() => {
+    if (open && exercisesHydrated) {
+      setFilteredExerciseIds(exerciseIds);
+    }
+  }, [open, exercisesHydrated, exerciseIds]);
 
   const exerciseListItems = useMemo(
     () => ['filter', suggestedNewExercise, ...filteredExerciseIds] as const,
@@ -49,16 +59,20 @@ export function ExerciseSearcher({
     onSelectExercise(exercise);
     setOpen(false);
   };
+
+  const openPicker = () => {
+    dispatch(ensureExercisesHydrated());
+    setOpen(true);
+    Keyboard.dismiss();
+    bottomSheetRef.current?.expand();
+  };
+
   return (
     <>
       <Button
         icon={'contentPasteSearch'}
         mode="contained"
-        onPress={() => {
-          setOpen(true);
-          Keyboard.dismiss();
-          bottomSheetRef.current?.expand();
-        }}
+        onPress={openPicker}
       >
         {currentExercise.name}
       </Button>
@@ -68,7 +82,19 @@ export function ExerciseSearcher({
         enablePanDownToClose
         enableDynamicSizing={false}
       >
-        {open && (
+        {open && !exercisesHydrated ? (
+          <View
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: spacing[8],
+            }}
+          >
+            <ActivityIndicator />
+          </View>
+        ) : null}
+        {open && exercisesHydrated ? (
           <LegendList
             data={exerciseListItems}
             renderScrollComponent={BottomSheetScrollView}
@@ -107,19 +133,18 @@ export function ExerciseSearcher({
               );
             }}
           />
-        )}
+        ) : null}
       </AppBottomSheet>
     </>
   );
 }
+
 function ExerciseIdSearchListItem(props: {
   exerciseId: string;
   onPress: (exercise: ExerciseDescriptor) => void;
 }) {
   const exercise = useAppSelectorWithArg(selectExerciseById, props.exerciseId);
-  if (!exercise) {
-    return <List.Item title={'Unknown'} />;
-  }
+  if (!exercise) return <List.Item title={'Unknown'} />;
   return (
     <List.Item title={exercise.name} onPress={() => props.onPress(exercise)} />
   );
