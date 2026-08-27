@@ -2,7 +2,7 @@ import { verticalBarChartProps } from '@/components/presentation/stats/line-grap
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { RepsBreakdownStatistics } from '@/store/stats';
 import { useTranslate } from '@tolgee/react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { BarChart, barDataItem } from 'react-native-gifted-charts';
 import { Text } from 'react-native-paper';
@@ -15,30 +15,41 @@ export function RepsBarChart({
   const { t } = useTranslate();
   const { colors } = useAppTheme();
   const charWidth = 7;
-  const items: barDataItem[] = Object.entries(breakdown)
-    .map(([numberOfReps, { numberOfSets }]) => {
-      const topLabelText = t(
-        'stats.exercise.reps_breakdown_sets_bar_top.label',
-        { sets: numberOfSets },
-      );
-      return {
-        value: numberOfSets,
-        label: numberOfReps,
-        barWidth: charWidth * topLabelText.length,
-        topLabelComponent: () => (
-          <Text
-            style={{ width: 200, textAlign: 'center', pointerEvents: 'none' }}
-          >
-            {topLabelText}
-          </Text>
-        ),
-      } satisfies barDataItem;
-    })
-    .sort((a, b) => b.value - a.value);
+  const items = useMemo<barDataItem[]>(
+    () =>
+      Object.entries(breakdown)
+        .map(([numberOfReps, { numberOfSets }]) => {
+          const topLabelText = t(
+            'stats.exercise.reps_breakdown_sets_bar_top.label',
+            { sets: numberOfSets },
+          );
+          return {
+            value: numberOfSets,
+            label: numberOfReps,
+            barWidth: charWidth * topLabelText.length,
+            topLabelComponent: () => (
+              <Text
+                style={{ width: 200, textAlign: 'center', pointerEvents: 'none' }}
+              >
+                {topLabelText}
+              </Text>
+            ),
+          } satisfies barDataItem;
+        })
+        .sort((a, b) => b.value - a.value),
+    [breakdown, t],
+  );
   const [width, setWidth] = useState(0);
 
   return (
-    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      onLayout={(e) => {
+        const nextWidth = e.nativeEvent.layout.width;
+        setWidth((currentWidth) =>
+          currentWidth === nextWidth ? currentWidth : nextWidth,
+        );
+      }}
+    >
       <BarChart
         {...verticalBarChartProps(colors, width)}
         frontColor={colors.primary + 'CC'}
