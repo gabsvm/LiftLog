@@ -11,6 +11,9 @@ interface WeightedExerciseProps {
   toStartNext: boolean;
   isReadonly: boolean;
   showPreviousButton: boolean;
+  supersetLabel?: string;
+  supersetConnectBefore: boolean;
+  supersetConnectAfter: boolean;
 
   timeProvider: () => OffsetDateTime;
   updateExercise: (
@@ -36,9 +39,10 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
       toStartNext={props.toStartNext}
       isReadonly={props.isReadonly}
       showPreviousButton={props.showPreviousButton}
-      updateExercise={(exercise) =>
-        updateExercise(exercise)
-      }
+      supersetLabel={props.supersetLabel}
+      supersetConnectBefore={props.supersetConnectBefore}
+      supersetConnectAfter={props.supersetConnectAfter}
+      updateExercise={(exercise) => updateExercise(exercise)}
       onEditExercise={props.onEditExercise}
       onRemoveExercise={props.onRemoveExercise}
     >
