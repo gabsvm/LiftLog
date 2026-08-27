@@ -1,5 +1,6 @@
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useAppSelector } from '@/store';
+import { initializeAppStateSlice } from '@/store/app';
 import { setIsHydrated as setCurrentSessionHydrated } from '@/store/current-session';
 import { setIsHydrated as setSettingsHydrated } from '@/store/settings';
 import { setIsHydrated as setProgramHydrated } from '@/store/program';
@@ -8,13 +9,16 @@ import { setIsHydrated as setAiPlannerHydrated } from '@/store/ai-planner';
 import { T } from '@tolgee/react';
 import { ReactNode, useEffect } from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const dispatch = useDispatch();
+  const initializationError = useAppSelector(
+    (state) => state.app.initializationError,
+  );
   const isWaiting = useAppSelector(
     (state) =>
       !state.app.isHydrated ||
@@ -24,8 +28,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       !state.storedSessions.isHydrated ||
       !state.aiPlanner.isHydrated,
   );
+
   useEffect(() => {
-    if (!isWaiting) return;
+    if (!isWaiting || initializationError) return;
     const timeout = setTimeout(() => {
       dispatch(setCurrentSessionHydrated(true));
       dispatch(setSettingsHydrated(true));
@@ -34,7 +39,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       dispatch(setAiPlannerHydrated(true));
     }, 8_000);
     return () => clearTimeout(timeout);
-  }, [dispatch, isWaiting]);
+  }, [dispatch, initializationError, isWaiting]);
 
   useEffect(() => {
     let secondFrame: number | undefined;
@@ -42,13 +47,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       void SplashScreen.hideAsync();
     };
 
-    if (isWaiting) {
+    if (isWaiting && !initializationError) {
       const timeout = setTimeout(hideNativeSplash, 1_500);
       return () => clearTimeout(timeout);
     }
 
-    // The state is ready. Wait for the navigation tree to commit and paint
-    // before revealing it, avoiding a blank frame between splash and tabs.
+    // Either the state is ready or we have an actionable startup error. Wait
+    // for the React tree to paint before hiding the native splash.
     const firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(hideNativeSplash);
     });
@@ -56,7 +61,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       cancelAnimationFrame(firstFrame);
       if (secondFrame !== undefined) cancelAnimationFrame(secondFrame);
     };
-  }, [isWaiting]);
+  }, [initializationError, isWaiting]);
+
+  if (initializationError) {
+    return (
+      <GainsLabStartupError
+        message={initializationError}
+        onRetry={() => dispatch(initializeAppStateSlice())}
+      />
+    );
+  }
 
   if (isWaiting) {
     return <GainsLabStartup />;
@@ -65,7 +79,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   return children;
 }
 
-function GainsLabStartup() {
+function StartupShell({ children }: { children: ReactNode }) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -77,6 +91,7 @@ function GainsLabStartup() {
         justifyContent: 'center',
         paddingTop: insets.top,
         paddingBottom: insets.bottom,
+        paddingHorizontal: 32,
         backgroundColor: colors.surface,
       }}
     >
@@ -85,45 +100,48 @@ function GainsLabStartup() {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         source={require('../../../assets/gainslab-splash.png')}
         resizeMode="contain"
-        style={{
-          position: 'absolute',
-          top: '50%',
-          width: 136,
-          height: 136,
-          marginTop: -68,
-        }}
+        style={{ width: 136, height: 136, marginBottom: 64 }}
       />
-      <View
+      {children}
+    </View>
+  );
+}
+
+function GainsLabBrand() {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ alignItems: 'center', gap: 2 }}>
+      <Text
+        variant="headlineSmall"
         style={{
-          position: 'absolute',
-          top: '50%',
-          alignItems: 'center',
-          gap: 16,
-          marginTop: 94,
+          color: colors.onSurface,
+          fontWeight: '800',
+          letterSpacing: -0.5,
         }}
       >
-        <View style={{ alignItems: 'center', gap: 2 }}>
-          <Text
-            variant="headlineSmall"
-            style={{
-              color: colors.onSurface,
-              fontWeight: '800',
-              letterSpacing: -0.5,
-            }}
-          >
-            Gains<Text style={{ color: colors.primary }}>Lab</Text>
-          </Text>
-          <Text
-            variant="labelSmall"
-            style={{
-              color: colors.primary,
-              fontWeight: '800',
-              letterSpacing: 1.2,
-            }}
-          >
-            <T keyName="gainslab.tagline" />
-          </Text>
-        </View>
+        Gains<Text style={{ color: colors.primary }}>Lab</Text>
+      </Text>
+      <Text
+        variant="labelSmall"
+        style={{
+          color: colors.primary,
+          fontWeight: '800',
+          letterSpacing: 1.2,
+        }}
+      >
+        <T keyName="gainslab.tagline" />
+      </Text>
+    </View>
+  );
+}
+
+function GainsLabStartup() {
+  const { colors } = useAppTheme();
+
+  return (
+    <StartupShell>
+      <View style={{ alignItems: 'center', gap: 16 }}>
+        <GainsLabBrand />
         <View style={{ alignItems: 'center', gap: 10 }}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text
@@ -134,6 +152,33 @@ function GainsLabStartup() {
           </Text>
         </View>
       </View>
-    </View>
+    </StartupShell>
+  );
+}
+
+function GainsLabStartupError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  const { colors } = useAppTheme();
+
+  return (
+    <StartupShell>
+      <View style={{ width: '100%', alignItems: 'center', gap: 20 }}>
+        <GainsLabBrand />
+        <Text
+          variant="bodyLarge"
+          style={{ color: colors.onSurfaceVariant, textAlign: 'center' }}
+        >
+          {message}
+        </Text>
+        <Button mode="contained" onPress={onRetry} style={{ minWidth: 160 }}>
+          <T keyName="generic.retry.button" />
+        </Button>
+      </View>
+    </StartupShell>
   );
 }
