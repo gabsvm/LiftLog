@@ -4,7 +4,9 @@ import {
   checkIfWeightMigrationRequired,
   deleteExercise,
   deleteStoredSession,
+  ensureExercisesHydrated,
   ensureHistoryHydrated,
+  hydrateExercises,
   initializeStoredSessionsStateSlice,
   migrateExerciseWeights,
   selectLatestExercises,
@@ -31,7 +33,6 @@ import {
 import { setCurrentSession } from '@/store/current-session';
 import { exercisesSchema, sessionsSchema } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
-import { toRecord } from '@/utils/reduce';
 import {
   ExerciseDescriptor,
   fromExerciseDescriptorJSON,
@@ -39,12 +40,14 @@ import {
 } from '@/models/exercise-models';
 import { RecordedExerciseJSON } from '@/models/storage/versions/latest';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
+import { KeyValueStore } from '@/services/key-value-store';
 
-// We keep track of added builtin exerciseIds (which are the exercise name for builtins)
-// Then we make sure builtins don't get re-added if they are deleted
 const addedBuiltInExerciseIdsStorageKey = 'AddedBuiltInExerciseIdList';
+const builtInExerciseCatalogVersionStorageKey = 'BuiltInExerciseCatalogVersionV1';
+const BUILT_IN_EXERCISE_CATALOG_VERSION = '1';
 const latestExercisesCacheStorageKey = 'LatestExercisesCacheV1';
-const POST_STARTUP_MIGRATION_SCAN_DELAY_MS = 350;
+const weightMigrationScanStorageKey = 'WeightMigrationScanV1';
+const POST_STARTUP_MIGRATION_SCAN_DELAY_MS = 1500;
 
 interface LatestExercisesCache {
   version: 1;
@@ -53,8 +56,12 @@ interface LatestExercisesCache {
   recentExercises: Record<string, RecordedExerciseJSON[]>;
 }
 
+interface WeightMigrationScanCache {
+  version: 1;
+  sessionCount: number;
+}
+
 export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
-  // Dispatched AFTER settings, so we can safely access settings
   addEffect(
     initializeStoredSessionsStateSlice,
     async (
@@ -115,83 +122,63 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
       }
 
       if (!progressionCacheLoaded) {
-        // One-time fallback for existing installs. Build only the progression
-        // derivatives; do not keep the full historical object graph in Redux.
         await logger.time('initializeStoredSessionsFallback', async () => {
           dispatch(setProgressionSessions(await loadAllSessions(db)));
         });
         await persistProgressionCache(getState(), db, keyValueStore);
       }
 
-      const { exercises: builtInExerciseList } =
-        await import('../../../assets/exercises.json');
-      const builtinExercisesAddedInThePast = JSON.parse(
-        (await keyValueStore.getItem(addedBuiltInExerciseIdsStorageKey)) ??
-          '[]',
-      ) as string[];
-      const savedExercises = (await db.select().from(exercisesSchema)).reduce(
-        toRecord(
-          (x) => x.id,
-          (x) => fromExerciseDescriptorJSON(x.payload),
-        ),
-        {},
-      );
-      const previouslyAddedIds = new Set(builtinExercisesAddedInThePast);
-      const builtInExercisesNotAlreadyAdded = builtInExerciseList
-        .filter((x) => !previouslyAddedIds.has(x.name))
-        .reduce(
-          (a, b) => {
-            a[b.name] = {
-              name: b.name,
-              force: b.force,
-              level: b.level,
-              mechanic: b.mechanic,
-              equipment: b.equipment,
-              category: b.category,
-              instructions: b.instructions.join('\n'),
-              muscles: b.primaryMuscles.concat(b.secondaryMuscles),
-            };
-            return a;
-          },
-          {} as Record<string, ExerciseDescriptor>,
-        );
-
-      const newBuiltInEntries = Object.entries(builtInExercisesNotAlreadyAdded);
-      if (newBuiltInEntries.length > 0) {
-        await db
-          .insert(exercisesSchema)
-          .values(
-            newBuiltInEntries.map(([id, exercise]) => ({
-              id,
-              payload: toExerciseDescriptorJSON(exercise),
-            })),
-          )
-          .onConflictDoNothing();
-      }
-
-      const currentExercises = Object.entries({
-        ...builtInExercisesNotAlreadyAdded,
-        ...savedExercises,
-      }).sort((a, b) => a[1].name.localeCompare(b[1].name));
-      dispatch(setExercises(Object.fromEntries(currentExercises)));
-
-      if (newBuiltInEntries.length > 0) {
-        const newBuiltIns = builtinExercisesAddedInThePast.concat(
-          newBuiltInEntries.map(([id]) => id),
-        );
-        await keyValueStore.setItem(
-          addedBuiltInExerciseIdsStorageKey,
-          JSON.stringify(newBuiltIns),
-        );
-      }
-
+      // The exercise library is not needed to show Home or start an existing
+      // program. It is hydrated only when the user opens an exercise picker or
+      // exercise manager, keeping the ~923 KB built-in catalog out of cold start.
       dispatch(setIsHydrated(true));
       dispatch(fetchUpcomingSessions());
 
-      setTimeout(
-        () => dispatch(checkIfWeightMigrationRequired()),
-        POST_STARTUP_MIGRATION_SCAN_DELAY_MS,
-      );
+      if (!(await isWeightMigrationScanCurrent(keyValueStore, sessionCount))) {
+        setTimeout(
+          () => dispatch(checkIfWeightMigrationRequired()),
+          POST_STARTUP_MIGRATION_SCAN_DELAY_MS,
+        );
+      }
+    },
+  );
+
+  addEffect(
+    ensureExercisesHydrated,
+    async (
+      _,
+      {
+        cancelActiveListeners,
+        getState,
+        dispatch,
+        extra: { keyValueStore, db, logger },
+      },
+    ) => {
+      cancelActiveListeners();
+      if (getState().storedSessions.isExercisesHydrated) return;
+
+      await logger.time('hydrateExerciseCatalog', async () => {
+        const catalogVersion = await keyValueStore.getItem(
+          builtInExerciseCatalogVersionStorageKey,
+        );
+
+        if (catalogVersion !== BUILT_IN_EXERCISE_CATALOG_VERSION) {
+          await seedBuiltInExercises(db, keyValueStore);
+          await keyValueStore.setItem(
+            builtInExerciseCatalogVersionStorageKey,
+            BUILT_IN_EXERCISE_CATALOG_VERSION,
+          );
+        }
+
+        const rows = await db.select().from(exercisesSchema);
+        const sorted = rows
+          .map(
+            (row) =>
+              [row.id, fromExerciseDescriptorJSON(row.payload)] as const,
+          )
+          .sort((a, b) => a[1].name.localeCompare(b[1].name));
+        dispatch(hydrateExercises(Object.fromEntries(sorted)));
+      });
     },
   );
 
@@ -217,7 +204,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
   addEffect(
     checkIfWeightMigrationRequired,
-    async (_, { dispatch, getState, extra: { db } }) => {
+    async (_, { dispatch, getState, extra: { db, keyValueStore } }) => {
       const state = getState();
       const completedSessionsList = state.storedSessions.isHistoryHydrated
         ? selectSessions(state)
@@ -244,12 +231,22 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
           ),
         ),
       );
+
+      // Once the database is known to contain no legacy nil weights, do not
+      // deserialize years of history on every launch. A session-count change
+      // invalidates this marker automatically.
+      if (migrationsByName.size === 0) {
+        await persistWeightMigrationScan(
+          keyValueStore,
+          await getSessionCount(db),
+        );
+      }
     },
   );
 
   addEffect(
     migrateExerciseWeights,
-    async (_, { dispatch, getState, extra: { db } }) => {
+    async (_, { dispatch, getState, extra: { db, keyValueStore } }) => {
       const state = getState();
       const historyWasHydrated = state.storedSessions.isHistoryHydrated;
       const sessions = historyWasHydrated
@@ -287,28 +284,26 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
         );
       }
       dispatch(upsertStoredSessions(newSessions));
-      if (!historyWasHydrated) {
-        dispatch(setProgressionSessions(newSessions));
-      }
+      if (!historyWasHydrated) dispatch(setProgressionSessions(newSessions));
       dispatch(fetchUpcomingSessions());
       dispatch(setExercisesRequiringWeightMigration([]));
+      await persistWeightMigrationScan(
+        keyValueStore,
+        await getSessionCount(db),
+      );
     },
   );
 
   addEffect(
     addStoredSession,
-    async (a, { getState, extra: { healthExportService, logger } }) => {
-      const workout = a.payload;
-      if (
-        !getState().settings.exportToHealthAggregator ||
-        !healthExportService.canExport()
-      ) {
-        return;
-      }
+    async (a, { getState, extra }) => {
+      if (!getState().settings.exportToHealthAggregator) return;
+      const healthExportService = extra.healthExportService;
+      if (!healthExportService.canExport()) return;
       try {
-        await healthExportService.exportWorkout(workout);
+        await healthExportService.exportWorkout(a.payload);
       } catch (e) {
-        logger.error('Failed to sync to health aggregator', e);
+        extra.logger.error('Failed to sync to health aggregator', e);
       }
     },
   );
@@ -334,21 +329,14 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
 
   addEffect(
     deleteStoredSession,
-    async (
-      action,
-      { stateAfterReduce, extra: { healthExportService, logger } },
-    ) => {
-      const workoutId = action.payload;
-      if (
-        !stateAfterReduce.settings.exportToHealthAggregator ||
-        !healthExportService.canExport()
-      ) {
-        return;
-      }
+    async (action, { stateAfterReduce, extra }) => {
+      if (!stateAfterReduce.settings.exportToHealthAggregator) return;
+      const healthExportService = extra.healthExportService;
+      if (!healthExportService.canExport()) return;
       try {
-        await healthExportService.deleteWorkout(workoutId);
+        await healthExportService.deleteWorkout(action.payload);
       } catch (e) {
-        logger.error('Failed to delete workout from HealthConnect', e);
+        extra.logger.error('Failed to delete workout from HealthConnect', e);
       }
     },
   );
@@ -420,6 +408,9 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
         await rebuildProgressionFromDatabase(dispatch, db);
       }
       await persistProgressionCache(getState(), db, keyValueStore);
+      // Imports/restores may introduce legacy records even if the row count
+      // happens to remain unchanged. Force the one-shot scan next launch.
+      await keyValueStore.removeItem(weightMigrationScanStorageKey);
     },
   );
 
@@ -462,6 +453,52 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
   );
 }
 
+async function seedBuiltInExercises(
+  db: ExpoSQLiteDatabase,
+  keyValueStore: KeyValueStore,
+) {
+  const { exercises: builtInExerciseList } =
+    await import('../../../assets/exercises.json');
+  const addedInThePast = JSON.parse(
+    (await keyValueStore.getItem(addedBuiltInExerciseIdsStorageKey)) ?? '[]',
+  ) as string[];
+  const previouslyAddedIds = new Set(addedInThePast);
+  const newEntries: Array<{ id: string; exercise: ExerciseDescriptor }> = [];
+
+  for (const builtIn of builtInExerciseList) {
+    if (previouslyAddedIds.has(builtIn.name)) continue;
+    newEntries.push({
+      id: builtIn.name,
+      exercise: {
+        name: builtIn.name,
+        force: builtIn.force,
+        level: builtIn.level,
+        mechanic: builtIn.mechanic,
+        equipment: builtIn.equipment,
+        category: builtIn.category,
+        instructions: builtIn.instructions.join('\n'),
+        muscles: builtIn.primaryMuscles.concat(builtIn.secondaryMuscles),
+      },
+    });
+  }
+
+  if (!newEntries.length) return;
+
+  await db
+    .insert(exercisesSchema)
+    .values(
+      newEntries.map(({ id, exercise }) => ({
+        id,
+        payload: toExerciseDescriptorJSON(exercise),
+      })),
+    )
+    .onConflictDoNothing();
+  await keyValueStore.setItem(
+    addedBuiltInExerciseIdsStorageKey,
+    JSON.stringify(addedInThePast.concat(newEntries.map(({ id }) => id))),
+  );
+}
+
 async function loadAllSessions(db: ExpoSQLiteDatabase): Promise<Session[]> {
   return (await db.select().from(sessionsSchema)).map((row) =>
     Session.fromJSON(row.payload),
@@ -497,9 +534,7 @@ async function getSessionCount(db: ExpoSQLiteDatabase): Promise<number> {
 async function persistProgressionCache(
   state: RootState,
   db: ExpoSQLiteDatabase,
-  keyValueStore: {
-    setItem(key: string, value: string): Promise<void>;
-  },
+  keyValueStore: Pick<KeyValueStore, 'setItem'>,
 ) {
   const latestExercises = selectLatestExercises(state);
   const recentExercises = selectRecentExercises(state);
@@ -507,9 +542,7 @@ async function persistProgressionCache(
   const recent: Record<string, RecordedExerciseJSON[]> = {};
 
   for (const [key, exercise] of Object.entries(latestExercises)) {
-    if (exercise) {
-      exercises[key] = (exercise as RecordedExercise).toJSON();
-    }
+    if (exercise) exercises[key] = (exercise as RecordedExercise).toJSON();
   }
   for (const [key, recordedExercises] of Object.entries(recentExercises)) {
     recent[key] = recordedExercises.map((exercise) =>
@@ -525,6 +558,31 @@ async function persistProgressionCache(
   };
   await keyValueStore.setItem(
     latestExercisesCacheStorageKey,
+    JSON.stringify(cache),
+  );
+}
+
+async function isWeightMigrationScanCurrent(
+  keyValueStore: KeyValueStore,
+  sessionCount: number,
+): Promise<boolean> {
+  const stored = await keyValueStore.getItem(weightMigrationScanStorageKey);
+  if (!stored) return false;
+  try {
+    const cache = JSON.parse(stored) as WeightMigrationScanCache;
+    return cache.version === 1 && cache.sessionCount === sessionCount;
+  } catch {
+    return false;
+  }
+}
+
+async function persistWeightMigrationScan(
+  keyValueStore: KeyValueStore,
+  sessionCount: number,
+) {
+  const cache: WeightMigrationScanCache = { version: 1, sessionCount };
+  await keyValueStore.setItem(
+    weightMigrationScanStorageKey,
     JSON.stringify(cache),
   );
 }
