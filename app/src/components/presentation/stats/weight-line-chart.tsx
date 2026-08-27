@@ -6,7 +6,7 @@ import {
 import { LineChart, lineDataItem } from 'react-native-gifted-charts';
 import { View } from 'react-native';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { lineGraphProps } from '@/components/presentation/stats/line-graph-props';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { Text } from 'react-native-paper';
@@ -19,20 +19,24 @@ export function WeightLineChart({
   const formatDate = useFormatDate();
   const weightUnit = usePreferredWeightUnit();
   const { colors } = useAppTheme();
-  const points: lineDataItem[] = statistics.map((stat): lineDataItem => {
-    const value = stat.value.convertTo(weightUnit).value.toNumber();
-    const label = formatDate(stat.dateTime.toLocalDate(), {
-      day: 'numeric',
-      month: 'short',
-    });
-    return {
-      value,
-      label,
-      focusedDataPointLabelComponent: () => (
-        <FocusedDatapointLabelComponent value={value} label={label} />
-      ),
-    };
-  });
+  const points = useMemo<lineDataItem[]>(
+    () =>
+      statistics.map((stat): lineDataItem => {
+        const value = stat.value.convertTo(weightUnit).value.toNumber();
+        const label = formatDate(stat.dateTime.toLocalDate(), {
+          day: 'numeric',
+          month: 'short',
+        });
+        return {
+          value,
+          label,
+          focusedDataPointLabelComponent: () => (
+            <FocusedDatapointLabelComponent value={value} label={label} />
+          ),
+        };
+      }),
+    [formatDate, statistics, weightUnit],
+  );
   const [width, setWidth] = useState(0);
   // On android the area chart renders poorly unless it is delayed until after initial render
   const [areaChart, setAreaChart] = useState(false);
@@ -40,7 +44,14 @@ export function WeightLineChart({
     setAreaChart(!!width);
   }, [width]);
   return (
-    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      onLayout={(e) => {
+        const nextWidth = e.nativeEvent.layout.width;
+        setWidth((currentWidth) =>
+          currentWidth === nextWidth ? currentWidth : nextWidth,
+        );
+      }}
+    >
       <LineChart
         {...lineGraphProps(colors, width, points.length)}
         negativeStepValue={
