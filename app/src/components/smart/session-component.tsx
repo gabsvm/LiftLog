@@ -22,7 +22,10 @@ import BigNumber from 'bignumber.js';
 import RestTimer from '@/components/presentation/workout/rest-timer';
 import { memo, ReactNode, useCallback, useState } from 'react';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
-import { ExerciseBlueprint } from '@/models/blueprint-models';
+import {
+  ExerciseBlueprint,
+  KeyedExerciseBlueprint,
+} from '@/models/blueprint-models';
 import FullScreenDialog from '@/components/presentation/foundation/full-screen-dialog';
 import { ExerciseEditor } from '@/components/presentation/workout-editor/exercise-editor';
 import { LocalTime, OffsetDateTime, ZoneId } from '@js-joda/core';
@@ -57,8 +60,6 @@ export default function SessionComponent(props: {
 
   const updateSession = useCallback<UpdateSession>(
     (reducer) => {
-      // Always reduce from the latest store value. This lets one user action
-      // produce exactly one Redux update without risking stale session state.
       const latestSession = selectCurrentSession(getState(), props.target);
       if (!latestSession) {
         return;
@@ -139,10 +140,9 @@ export default function SessionComponent(props: {
     return <Text>{t('generic.loading.label')}</Text>;
   }
 
-  // These getters walk the exercise list. Calculate each once per render rather
-  // than once per exercise card.
   const nextExercise = session.nextExercise;
   const lastExercise = session.lastExercise;
+  const exerciseKeys = buildExerciseKeys(session.recordedExercises);
 
   const notesComponent = session.blueprint.notes ? (
     <Card
@@ -239,13 +239,7 @@ export default function SessionComponent(props: {
   const floatingBottomContainer = isReadonly ? null : (
     <FloatingBottomContainer
       additionalContent={
-        <View
-          style={{
-            alignItems: 'center',
-          }}
-        >
-          {restTimer}
-        </View>
+        <View style={{ alignItems: 'center' }}>{restTimer}</View>
       }
     />
   );
@@ -307,6 +301,7 @@ export default function SessionComponent(props: {
       {emptyInfo}
       <ItemList
         items={session.recordedExercises}
+        keyExtractor={(_, index) => exerciseKeys[index] ?? String(index)}
         renderItem={(recordedExercise, index) => (
           <MemoizedSessionExerciseItem
             index={index}
@@ -344,9 +339,7 @@ export default function SessionComponent(props: {
         {editingExerciseBlueprint ? (
           <ExerciseEditor
             exercise={editingExerciseBlueprint}
-            updateExercise={(ex) => {
-              setEditingExerciseBlueprint(ex);
-            }}
+            updateExercise={setEditingExerciseBlueprint}
           />
         ) : null}
       </FullScreenDialog>
@@ -464,6 +457,18 @@ const MemoizedSessionExerciseItem = memo(
       next.previousRecordedExercises,
     ),
 );
+
+function buildExerciseKeys(exercises: readonly RecordedExercise[]): string[] {
+  const occurrences = new Map<string, number>();
+  return exercises.map((exercise) => {
+    const base = KeyedExerciseBlueprint.fromExerciseBlueprint(
+      exercise.blueprint,
+    ).toString();
+    const occurrence = occurrences.get(base) ?? 0;
+    occurrences.set(base, occurrence + 1);
+    return `${exercise.type}:${base}:${occurrence}`;
+  });
+}
 
 function sameExerciseReferences(
   previous: RecordedExercise[],
