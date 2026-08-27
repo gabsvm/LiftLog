@@ -1,10 +1,9 @@
-import { spacing } from '@/hooks/useAppTheme';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { RecordedExercise } from '@/models/session-models';
 import { useAppSelector } from '@/store';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
-import { Card, Divider, Text } from 'react-native-paper';
-import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
+import { Card, Divider, Icon, Text } from 'react-native-paper';
 
 interface ExerciseNotesDisplayProps {
   exercise: RecordedExercise;
@@ -12,6 +11,7 @@ interface ExerciseNotesDisplayProps {
 }
 
 export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
+  const { colors } = useAppTheme();
   const expandByDefault = useAppSelector(
     (x) => x.settings.notesExpandedByDefault,
   );
@@ -20,7 +20,10 @@ export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
   const previousNotes = props.previousExercise?.notes
     ? 'Last time: ' + props.previousExercise.notes
     : '';
-  const [expanded, setExpanded] = useState(expandByDefault);
+  const templateOnly = !!blueprintNotes && !notes && !previousNotes;
+  const [expanded, setExpanded] = useState(() =>
+    templateOnly ? false : expandByDefault,
+  );
   const hasNotes = !!(notes || blueprintNotes || previousNotes);
 
   const handleToggleExpanded = useCallback(() => {
@@ -38,28 +41,40 @@ export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
       mode="contained"
       onPress={handleToggleExpanded}
       style={{ marginTop: spacing[3] }}
+      testID="exercise-notes-card"
     >
       <Card.Content
         style={{
           flexDirection: 'row',
           alignItems: expanded ? 'flex-start' : 'center',
-          gap: spacing[1],
-          paddingVertical: expanded ? spacing[3] : spacing[2],
+          gap: expanded ? spacing[2] : spacing[1],
+          paddingVertical: expanded ? spacing[3] : spacing[1],
+          paddingHorizontal: expanded ? spacing[3] : spacing[2],
         }}
       >
-        <IconButton
-          icon={expanded ? 'unfoldLess' : 'unfoldMore'}
-          style={{ margin: 0, marginLeft: -spacing[2] }}
-          onPress={handleToggleExpanded}
-        />
+        <View style={{ paddingTop: expanded ? 2 : 0 }}>
+          <Icon
+            source={expanded ? 'unfoldLess' : 'notes'}
+            size={expanded ? 19 : 17}
+            color={colors.onSurfaceVariant}
+          />
+        </View>
 
         <View style={{ flex: 1, gap: spacing[2] }}>
           {!expanded ? (
-            <Text numberOfLines={1}>{collapsedText}</Text>
+            <Text
+              variant="bodySmall"
+              numberOfLines={1}
+              style={{ color: colors.onSurfaceVariant }}
+            >
+              {collapsedText}
+            </Text>
           ) : (
             <>
               {!!notes && <Text testID="exercise-notes">{notes}</Text>}
-              {!!notes && (!!blueprintNotes || !!previousNotes) ? <Divider /> : null}
+              {!!notes && (!!blueprintNotes || !!previousNotes) ? (
+                <Divider />
+              ) : null}
               {!!blueprintNotes && (
                 <Text testID="exercise-blueprint-notes">{blueprintNotes}</Text>
               )}
@@ -70,6 +85,10 @@ export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
             </>
           )}
         </View>
+
+        {!expanded ? (
+          <Icon source="unfoldMore" size={18} color={colors.onSurfaceVariant} />
+        ) : null}
       </Card.Content>
     </Card>
   );
