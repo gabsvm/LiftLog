@@ -103,17 +103,17 @@ export function TimePeriodSelector({
           }
         }}
       />
-      {timePeriod !== 'all-time' && (
+      {timeRangeSelectorOpen && timePeriod !== 'all-time' ? (
         <DatePickerModal
           locale="default"
           mode="range"
-          visible={timeRangeSelectorOpen}
+          visible
           onDismiss={() => setTimeRangeSelectorOpen(false)}
           onConfirm={handleCustomRangePicked}
           startDate={convert(timePeriod.from).toDate()}
           endDate={convert(timePeriod.to).toDate()}
         />
-      )}
+      ) : null}
     </>
   );
 }
