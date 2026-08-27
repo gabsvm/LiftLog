@@ -1,24 +1,29 @@
 import { spacing } from '@/hooks/useAppTheme';
-import { ReactNode } from 'react';
+import { Children, ReactNode } from 'react';
 import { View } from 'react-native';
-import { FlatGrid } from 'react-native-super-grid';
 
 export function SingleValueStatisticsGrid(props: { children: ReactNode[] }) {
-  const gridSpacing = spacing[2];
+  const items = Children.toArray(props.children);
   return (
-    <FlatGrid
-      scrollEnabled={false}
-      data={props.children}
-      spacing={gridSpacing}
-      maxItemsPerRow={2}
-      style={{ marginHorizontal: -gridSpacing }}
-      renderItem={({ item }) => (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+      }}
+    >
+      {items.map((item, index) => (
         <View
-          style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-start' }}
+          key={index}
+          style={{
+            flexBasis: '48%',
+            flexGrow: 1,
+            minWidth: 0,
+          }}
         >
           {item}
         </View>
-      )}
-    />
+      ))}
+    </View>
   );
 }
