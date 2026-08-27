@@ -1,25 +1,23 @@
-import { AiChatService } from '@/services/ai-chat-service';
-import { EncryptionService } from '@/services/encryption-service';
-import { FeedApiService } from '@/services/feed-api';
-import { FeedFollowService } from '@/services/feed-follow-service';
-import { FeedIdentityService } from '@/services/feed-identity-service';
-import { FeedInboxDecryptionService } from '@/services/feed-inbox-decryption-service';
-import { FileExportService } from '@/services/file-export-service';
-import { FilePickerService } from '@/services/file-picker-service';
-import { HubConnectionFactory } from '@/services/hub-connection-factory';
+import type { AiChatService } from '@/services/ai-chat-service';
+import type { EncryptionService } from '@/services/encryption-service';
+import type { FeedApiService } from '@/services/feed-api';
+import type { FeedFollowService } from '@/services/feed-follow-service';
+import type { FeedIdentityService } from '@/services/feed-identity-service';
+import type { FeedInboxDecryptionService } from '@/services/feed-inbox-decryption-service';
+import type { FileExportService } from '@/services/file-export-service';
+import type { FilePickerService } from '@/services/file-picker-service';
+import type { NotificationService } from '@/services/notification-service';
+import type { StringSharer } from '@/services/string-sharer';
 import { KeyValueStore } from '@/services/key-value-store';
 import { Logger } from '@/services/logger';
-import { NotificationService } from '@/services/notification-service';
 import { PreferenceService } from '@/services/preference-service';
 import { ProgressRepository } from '@/services/progress-repository';
 import { SessionService } from '@/services/session-service';
-import { StringSharer } from '@/services/string-sharer';
 import { getTolgee } from '@/services/tolgee';
 import { WorkoutWorker } from '@/services/workout-worker';
 import { RootState } from '@/store';
 import { Store } from '@reduxjs/toolkit';
-import { HealthExportService } from './health-export-service';
-import { HealthExportService as HES } from './health-export-service-shared';
+import type { HealthExportService as HES } from './health-export-service-shared';
 import { DatabaseMigrationService } from './database-migration-service';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { SQLiteDatabase } from 'expo-sqlite';
@@ -38,9 +36,6 @@ function resolveServicesInternal(
     throw new Error('Tried to resolve services without store');
   }
 
-  // Keep the small services used by startup and every workout eager. Everything
-  // feature-specific is exposed through a getter so constructing the service
-  // container does not initialize crypto, Feed, AI, Health, or file APIs.
   const logger = new Logger();
   const keyValueStore = new KeyValueStore();
   const progressRepository = new ProgressRepository(store.getState);
@@ -70,9 +65,24 @@ function resolveServicesInternal(
   let aiChatService: AiChatService | undefined;
   let healthExportService: HES | undefined;
 
-  const getEncryptionService = () =>
-    (encryptionService ??= new EncryptionService());
-  const getFeedApiService = () => (feedApiService ??= new FeedApiService());
+  const getEncryptionService = (): EncryptionService => {
+    if (!encryptionService) {
+      // Keep QuickCrypto and its JSI setup out of normal app startup.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { EncryptionService: Service } = require('./encryption-service') as typeof import('./encryption-service');
+      encryptionService = new Service();
+    }
+    return encryptionService;
+  };
+
+  const getFeedApiService = (): FeedApiService => {
+    if (!feedApiService) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { FeedApiService: Service } = require('./feed-api') as typeof import('./feed-api');
+      feedApiService = new Service();
+    }
+    return feedApiService;
+  };
 
   return {
     logger,
@@ -86,11 +96,13 @@ function resolveServicesInternal(
     expoDb,
     databaseMigrationService,
 
-    get notificationService() {
-      return (notificationService ??= new NotificationService(
-        store.getState,
-        store.dispatch,
-      ));
+    get notificationService(): NotificationService {
+      if (!notificationService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { NotificationService: Service } = require('./notification-service') as typeof import('./notification-service');
+        notificationService = new Service(store.getState, store.dispatch);
+      }
+      return notificationService;
     },
     get encryptionService() {
       return getEncryptionService();
@@ -98,41 +110,83 @@ function resolveServicesInternal(
     get feedApiService() {
       return getFeedApiService();
     },
-    get feedIdentityService() {
-      return (feedIdentityService ??= new FeedIdentityService(
-        getFeedApiService(),
-        getEncryptionService(),
-      ));
+    get feedIdentityService(): FeedIdentityService {
+      if (!feedIdentityService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { FeedIdentityService: Service } = require('./feed-identity-service') as typeof import('./feed-identity-service');
+        feedIdentityService = new Service(
+          getFeedApiService(),
+          getEncryptionService(),
+        );
+      }
+      return feedIdentityService;
     },
-    get feedInboxDecryptionService() {
-      return (feedInboxDecryptionService ??= new FeedInboxDecryptionService(
-        getEncryptionService(),
-        getFeedApiService(),
-      ));
+    get feedInboxDecryptionService(): FeedInboxDecryptionService {
+      if (!feedInboxDecryptionService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { FeedInboxDecryptionService: Service } = require('./feed-inbox-decryption-service') as typeof import('./feed-inbox-decryption-service');
+        feedInboxDecryptionService = new Service(
+          getEncryptionService(),
+          getFeedApiService(),
+        );
+      }
+      return feedInboxDecryptionService;
     },
-    get feedFollowService() {
-      return (feedFollowService ??= new FeedFollowService(
-        getFeedApiService(),
-        getEncryptionService(),
-      ));
+    get feedFollowService(): FeedFollowService {
+      if (!feedFollowService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { FeedFollowService: Service } = require('./feed-follow-service') as typeof import('./feed-follow-service');
+        feedFollowService = new Service(
+          getFeedApiService(),
+          getEncryptionService(),
+        );
+      }
+      return feedFollowService;
     },
-    get stringSharer() {
-      return (stringSharer ??= new StringSharer());
+    get stringSharer(): StringSharer {
+      if (!stringSharer) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { StringSharer: Service } = require('./string-sharer') as typeof import('./string-sharer');
+        stringSharer = new Service();
+      }
+      return stringSharer;
     },
-    get fileExportService() {
-      return (fileExportService ??= new FileExportService());
+    get fileExportService(): FileExportService {
+      if (!fileExportService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { FileExportService: Service } = require('./file-export-service') as typeof import('./file-export-service');
+        fileExportService = new Service();
+      }
+      return fileExportService;
     },
-    get filePickerService() {
-      return (filePickerService ??= new FilePickerService());
+    get filePickerService(): FilePickerService {
+      if (!filePickerService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { FilePickerService: Service } = require('./file-picker-service') as typeof import('./file-picker-service');
+        filePickerService = new Service();
+      }
+      return filePickerService;
     },
-    get aiChatService() {
-      return (aiChatService ??= new AiChatService(
-        new HubConnectionFactory(),
-        store.getState,
-      ));
+    get aiChatService(): AiChatService {
+      if (!aiChatService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { AiChatService: Service } = require('./ai-chat-service') as typeof import('./ai-chat-service');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { HubConnectionFactory } = require('./hub-connection-factory') as typeof import('./hub-connection-factory');
+        aiChatService = new Service(
+          new HubConnectionFactory(),
+          store.getState,
+        );
+      }
+      return aiChatService;
     },
     get healthExportService(): HES {
-      return (healthExportService ??= new HealthExportService());
+      if (!healthExportService) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { HealthExportService: Service } = require('./health-export-service') as typeof import('./health-export-service');
+        healthExportService = new Service();
+      }
+      return healthExportService;
     },
   };
 }
