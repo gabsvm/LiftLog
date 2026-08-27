@@ -12,8 +12,8 @@ interface WeightedExerciseProps {
   isReadonly: boolean;
   showPreviousButton: boolean;
   supersetLabel?: string;
-  supersetConnectBefore: boolean;
-  supersetConnectAfter: boolean;
+  supersetConnectBefore?: boolean;
+  supersetConnectAfter?: boolean;
 
   timeProvider: () => OffsetDateTime;
   updateExercise: (
