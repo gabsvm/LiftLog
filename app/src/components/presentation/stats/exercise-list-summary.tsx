@@ -13,7 +13,6 @@ import {
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useTranslate } from '@tolgee/react';
 import { useRouter } from 'expo-router';
-import Enumerable from 'linq';
 import { useRef, useState } from 'react';
 
 export function ExerciseListSummary(props: { stats: GranularStatisticView }) {
@@ -22,11 +21,7 @@ export function ExerciseListSummary(props: { stats: GranularStatisticView }) {
   const { t } = useTranslate();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const topWeightedExercises = Enumerable.from(
-    props.stats.weightedExerciseStats,
-  )
-    .take(5)
-    .toArray();
+  const topWeightedExercises = props.stats.weightedExerciseStats.slice(0, 5);
   const hasExerciseStats = props.stats.weightedExerciseStats.length > 0;
 
   const onItemPress = (item: WeightedExerciseStatistics) => {
