@@ -7,11 +7,13 @@ import {
 
 const initialState: AppState = {
   isHydrated: false,
+  initializationError: undefined,
   currentSnackbar: undefined,
 };
 
 type AppState = {
   isHydrated: boolean;
+  initializationError: string | undefined;
   currentSnackbar: SnackbarDescriptor | undefined;
 };
 
@@ -21,6 +23,10 @@ const appSlice = createSlice({
   reducers: {
     setIsHydrated(state, action: PayloadAction<boolean>) {
       state.isHydrated = action.payload;
+    },
+
+    setInitializationError(state, action: PayloadAction<string | undefined>) {
+      state.initializationError = action.payload;
     },
 
     setCurrentSnackbar(
@@ -54,6 +60,10 @@ export const showSnackbar = createAction<
   SnackbarDescriptor & { duration?: number }
 >('snackBarWithAction');
 
-export const { setIsHydrated, setCurrentSnackbar } = appSlice.actions;
+export const {
+  setIsHydrated,
+  setInitializationError,
+  setCurrentSnackbar,
+} = appSlice.actions;
 
 export default appSlice.reducer;
