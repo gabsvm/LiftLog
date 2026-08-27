@@ -233,33 +233,39 @@ export default function ExerciseSection<T extends RecordedExercise>(
           />
         </View>
 
-        <RecordedExerciseNotesEditor
-          exerciseName={recordedExercise.blueprint.name}
-          onDismiss={() => setNotesDialogOpen(false)}
-          open={notesDialogOpen}
-          notes={recordedExercise.notes}
-          onUpdateNotes={(notes) =>
-            updateExercise(recordedExercise.with({ notes }) as T)
-          }
-        />
-        <ConfirmationDialog
-          headline={t('exercise.remove.confirm.title')}
-          textContent={t('exercise.remove.confirm.body')}
-          okText={t('generic.remove.button')}
-          open={removeExerciseDialogOpen}
-          onOk={() => {
-            setRemoveExerciseDialogOpen(false);
-            onRemoveExercise();
-          }}
-          onCancel={() => setRemoveExerciseDialogOpen(false)}
-          preventCancel={false}
-        />
-        <PreviousExerciseViewer
-          name={recordedExercise.blueprint.name}
-          previousRecordedExercises={props.previousRecordedExercises}
-          close={() => setPreviousDialogOpen(false)}
-          open={previousDialogOpen}
-        />
+        {notesDialogOpen ? (
+          <RecordedExerciseNotesEditor
+            exerciseName={recordedExercise.blueprint.name}
+            onDismiss={() => setNotesDialogOpen(false)}
+            open
+            notes={recordedExercise.notes}
+            onUpdateNotes={(notes) =>
+              updateExercise(recordedExercise.with({ notes }) as T)
+            }
+          />
+        ) : null}
+        {removeExerciseDialogOpen ? (
+          <ConfirmationDialog
+            headline={t('exercise.remove.confirm.title')}
+            textContent={t('exercise.remove.confirm.body')}
+            okText={t('generic.remove.button')}
+            open
+            onOk={() => {
+              setRemoveExerciseDialogOpen(false);
+              onRemoveExercise();
+            }}
+            onCancel={() => setRemoveExerciseDialogOpen(false)}
+            preventCancel={false}
+          />
+        ) : null}
+        {previousDialogOpen ? (
+          <PreviousExerciseViewer
+            name={recordedExercise.blueprint.name}
+            previousRecordedExercises={props.previousRecordedExercises}
+            close={() => setPreviousDialogOpen(false)}
+            open
+          />
+        ) : null}
       </View>
     </View>
   );
