@@ -14,7 +14,12 @@ import {
 import { uuid } from '@/utils/uuid';
 import { AsyncStream } from 'data-async-iterators';
 import { Logger } from '@/services/logger';
-import { selectLatestExercises } from '../stored-sessions';
+import {
+  addStoredSession,
+  deleteStoredSession,
+  selectLatestExercises,
+  upsertStoredSessions,
+} from '../stored-sessions';
 import { programsSchema } from '@/db/schema';
 import { toLocalDateJSON } from '@/models/storage/versions/latest';
 import { LocalDate } from '@js-joda/core';
@@ -23,6 +28,7 @@ import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { TaskAbortError } from '@reduxjs/toolkit';
 
 const builtInProgramsStorageKey = 'hasSavedDefaultPlans3';
+
 export function applyProgramEffects(addEffect: AddEffectFn) {
   addEffect(
     initializeProgramStateSlice,
@@ -66,8 +72,6 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
         }
       }
 
-      // Loading all programs in one reducer pass avoids notifying every store
-      // listener once per built-in plan on a fresh install.
       dispatch(setSavedPlans(programs));
 
       if (shouldSeedBuiltInPrograms) {
@@ -79,16 +83,13 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
       }
 
       dispatch(setActivePlan({ activePlanId }));
-
       dispatch(setIsHydrated(true));
-      const end = performance.now();
       logger.info(
-        `initializeProgramStateSlice effect took ${(end - start).toFixed(2)} ms`,
+        `initializeProgramStateSlice effect took ${(performance.now() - start).toFixed(2)} ms`,
       );
     },
   );
 
-  // Persist after changes
   addEffect(
     undefined,
     async (
@@ -111,9 +112,8 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
             stateBeforeReduce.program.savedPrograms);
       if (shouldPersist) {
         await persistPrograms(stateAfterReduce, db, logger, throwIfCancelled);
-        const end = performance.now();
         logger.info(
-          `Persist program state effect took ${(end - start).toFixed(2)} ms`,
+          `Persist program state effect took ${(performance.now() - start).toFixed(2)} ms`,
         );
       }
     },
@@ -138,12 +138,9 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
       const state = getState();
       const sessionBlueprints = selectActiveProgram(state).sessions;
       const numberOfUpcomingSessions = sessionBlueprints.length;
+      if (signal.aborted) return;
 
-      if (signal.aborted) {
-        return;
-      }
       await yieldToEventLoop();
-
       const sessions = await AsyncStream.from(
         sessionService.getUpcomingSessions(
           sessionBlueprints,
@@ -153,16 +150,37 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
         .takeWhile(() => !signal.aborted)
         .take(numberOfUpcomingSessions)
         .toArray();
+      if (signal.aborted) return;
+
       dispatch(setUpcomingSessions(RemoteData.success(sessions)));
-      const end = performance.now();
       logger.info(
-        `fetchUpcomingSessions effect took ${(end - start).toFixed(2)} ms`,
+        `fetchUpcomingSessions effect took ${(performance.now() - start).toFixed(2)} ms`,
       );
     },
   );
+
+  // This tiny snapshot is enough to preserve plan rotation across launches.
+  // It avoids loading/sorting the historical session table just to determine
+  // which program session comes next.
+  addEffect(
+    addStoredSession,
+    async (action, { extra: { sessionService } }) => {
+      await sessionService.rememberCompletedSession(action.payload);
+    },
+  );
+
+  // Historical edits/imports/deletes can change which session is latest. The
+  // in-memory derivative is rebuilt by stored-sessions; invalidate the disk
+  // shortcut so the next cold launch cannot use stale rotation data.
+  addEffect(
+    [deleteStoredSession, upsertStoredSessions],
+    async (_, { extra: { sessionService } }) => {
+      await sessionService.invalidateLatestCompletedSessionCache();
+    },
+  );
 }
-// Helper function to yield control back to the event loop
-const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function persistPrograms(
   stateAfterReduce: RootState,
@@ -186,9 +204,7 @@ async function persistPrograms(
       throwIfCancelled();
     });
   } catch (e) {
-    if (e instanceof TaskAbortError) {
-      return;
-    }
+    if (e instanceof TaskAbortError) return;
     logger.error('Failed to persist program state', e);
   }
 }
