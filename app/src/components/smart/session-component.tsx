@@ -41,6 +41,12 @@ const BODYWEIGHT_INCREMENT = new BigNumber('0.1');
 
 type UpdateSession = (reducer: (session: Session) => Session) => void;
 
+type SupersetVisual = {
+  label?: string;
+  connectBefore: boolean;
+  connectAfter: boolean;
+};
+
 export default function SessionComponent(props: {
   target: SessionTarget;
   showBodyweight: boolean;
@@ -143,6 +149,7 @@ export default function SessionComponent(props: {
   const nextExercise = session.nextExercise;
   const lastExercise = session.lastExercise;
   const exerciseKeys = buildExerciseKeys(session.recordedExercises);
+  const supersetVisuals = buildSupersetVisuals(session.recordedExercises);
 
   const notesComponent = session.blueprint.notes ? (
     <Card
@@ -302,21 +309,27 @@ export default function SessionComponent(props: {
       <ItemList
         items={session.recordedExercises}
         keyExtractor={(_, index) => exerciseKeys[index] ?? String(index)}
-        renderItem={(recordedExercise, index) => (
-          <MemoizedSessionExerciseItem
-            index={index}
-            recordedExercise={recordedExercise}
-            previousRecordedExercises={recentlyCompletedExercises(
-              recordedExercise.blueprint,
-            )}
-            toStartNext={nextExercise === recordedExercise}
-            isReadonly={isReadonly}
-            showPreviousButton={props.target === 'workoutSession'}
-            timeProvider={timeProvider}
-            updateSession={updateSession}
-            beginEditExercise={beginEditExercise}
-          />
-        )}
+        renderItem={(recordedExercise, index) => {
+          const supersetVisual = supersetVisuals[index];
+          return (
+            <MemoizedSessionExerciseItem
+              index={index}
+              recordedExercise={recordedExercise}
+              previousRecordedExercises={recentlyCompletedExercises(
+                recordedExercise.blueprint,
+              )}
+              toStartNext={nextExercise === recordedExercise}
+              isReadonly={isReadonly}
+              showPreviousButton={props.target === 'workoutSession'}
+              supersetLabel={supersetVisual?.label}
+              supersetConnectBefore={supersetVisual?.connectBefore ?? false}
+              supersetConnectAfter={supersetVisual?.connectAfter ?? false}
+              timeProvider={timeProvider}
+              updateSession={updateSession}
+              beginEditExercise={beginEditExercise}
+            />
+          );
+        }}
       />
       {bodyweight}
       {workoutSummary}
@@ -354,6 +367,9 @@ interface SessionExerciseItemProps {
   toStartNext: boolean;
   isReadonly: boolean;
   showPreviousButton: boolean;
+  supersetLabel?: string;
+  supersetConnectBefore: boolean;
+  supersetConnectAfter: boolean;
   timeProvider: () => OffsetDateTime;
   updateSession: UpdateSession;
   beginEditExercise: (index: number, blueprint: ExerciseBlueprint) => void;
@@ -368,6 +384,9 @@ const MemoizedSessionExerciseItem = memo(
       toStartNext,
       isReadonly,
       showPreviousButton,
+      supersetLabel,
+      supersetConnectBefore,
+      supersetConnectAfter,
       timeProvider,
       updateSession,
       beginEditExercise,
@@ -421,6 +440,9 @@ const MemoizedSessionExerciseItem = memo(
           onRemoveExercise={removeExercise}
           isReadonly={isReadonly}
           showPreviousButton={showPreviousButton}
+          supersetLabel={supersetLabel}
+          supersetConnectBefore={supersetConnectBefore}
+          supersetConnectAfter={supersetConnectAfter}
           previousRecordedExercises={
             previousRecordedExercises as RecordedWeightedExercise[]
           }
@@ -449,6 +471,9 @@ const MemoizedSessionExerciseItem = memo(
     previous.toStartNext === next.toStartNext &&
     previous.isReadonly === next.isReadonly &&
     previous.showPreviousButton === next.showPreviousButton &&
+    previous.supersetLabel === next.supersetLabel &&
+    previous.supersetConnectBefore === next.supersetConnectBefore &&
+    previous.supersetConnectAfter === next.supersetConnectAfter &&
     previous.timeProvider === next.timeProvider &&
     previous.updateSession === next.updateSession &&
     previous.beginEditExercise === next.beginEditExercise &&
@@ -468,6 +493,61 @@ function buildExerciseKeys(exercises: readonly RecordedExercise[]): string[] {
     occurrences.set(base, occurrence + 1);
     return `${exercise.type}:${base}:${occurrence}`;
   });
+}
+
+function buildSupersetVisuals(
+  exercises: readonly RecordedExercise[],
+): SupersetVisual[] {
+  const visuals: SupersetVisual[] = exercises.map(() => ({
+    connectBefore: false,
+    connectAfter: false,
+  }));
+  let groupIndex = 0;
+  let index = 0;
+
+  while (index < exercises.length - 1) {
+    const first = exercises[index];
+    const next = exercises[index + 1];
+    if (
+      !(first instanceof RecordedWeightedExercise) ||
+      !first.blueprint.supersetWithNext ||
+      !(next instanceof RecordedWeightedExercise)
+    ) {
+      index += 1;
+      continue;
+    }
+
+    let endIndex = index + 1;
+    while (endIndex < exercises.length - 1) {
+      const current = exercises[endIndex];
+      const following = exercises[endIndex + 1];
+      if (
+        !(current instanceof RecordedWeightedExercise) ||
+        !current.blueprint.supersetWithNext ||
+        !(following instanceof RecordedWeightedExercise)
+      ) {
+        break;
+      }
+      endIndex += 1;
+    }
+
+    const groupName = getSupersetGroupName(groupIndex);
+    groupIndex += 1;
+    for (let groupExerciseIndex = index; groupExerciseIndex <= endIndex; groupExerciseIndex += 1) {
+      visuals[groupExerciseIndex] = {
+        label: `${groupName}${groupExerciseIndex - index + 1}`,
+        connectBefore: groupExerciseIndex > index,
+        connectAfter: groupExerciseIndex < endIndex,
+      };
+    }
+    index = endIndex + 1;
+  }
+
+  return visuals;
+}
+
+function getSupersetGroupName(index: number): string {
+  return index < 26 ? String.fromCharCode(65 + index) : `S${index + 1}`;
 }
 
 function sameExerciseReferences(
