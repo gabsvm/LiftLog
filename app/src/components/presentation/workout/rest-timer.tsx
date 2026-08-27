@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ColorChoice, spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Rest } from '@/models/blueprint-models';
 import { Duration, OffsetDateTime } from '@js-joda/core';
@@ -26,10 +26,10 @@ export default function RestTimer({
 }: RestTimerProps) {
   const { colors } = useAppTheme();
   const isSameMinMaxRest = rest.minRest.equals(rest.maxRest);
-  const [jiggled, setJiggled] = useState([] as string[]);
+  const jiggled = useRef(new Set<string>());
 
   useEffect(() => {
-    setJiggled([]);
+    jiggled.current.clear();
   }, [startTime]);
 
   const getTimerState = useCallback(() => {
@@ -67,16 +67,13 @@ export default function RestTimer({
   const [timerState, setTimerState] = useState(getTimerState());
   const [jiggling, setJiggling] = useState(false);
 
-  const triggerJiggle = useCallback(
-    (milestone: string) => {
-      if (jiggled.includes(milestone)) return;
-      void impactAsync(ImpactFeedbackStyle.Heavy).catch(() => undefined);
-      setJiggling(true);
-      setTimeout(() => setJiggling(false), 10);
-      setJiggled((j) => [...j, milestone]);
-    },
-    [jiggled],
-  );
+  const triggerJiggle = useCallback((milestone: string) => {
+    if (jiggled.current.has(milestone)) return;
+    jiggled.current.add(milestone);
+    void impactAsync(ImpactFeedbackStyle.Heavy).catch(() => undefined);
+    setJiggling(true);
+    setTimeout(() => setJiggling(false), 10);
+  }, []);
 
   const pillHeight = spacing[14];
   const pillWidth = pillHeight * 2.2;
@@ -93,8 +90,6 @@ export default function RestTimer({
     };
 
     update();
-    // The UI displays whole seconds. Updating at 5 Hz plus starting two JS SVG
-    // animations every tick kept the JS thread busy throughout every rest.
     const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
   }, [getTimerState, triggerJiggle]);
