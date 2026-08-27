@@ -99,7 +99,7 @@ export default function Settings() {
         />
       </SettingsGroup>
 
-      <SettingsGroup title={t('settings.support.title')}>
+      <SettingsCard>
         <List.Item
           onPress={() => push('/settings/ai/planner')}
           title={t('ai.planner.title')}
@@ -118,6 +118,9 @@ export default function Settings() {
           description={t('feed.explanation.body')}
           left={(props) => <List.Icon icon={'forum'} {...props} />}
         />
+      </SettingsCard>
+
+      <SettingsGroup title={t('settings.support.title')}>
         <List.Item
           onPress={() => openUrl('https://github.com/gabsvm/LiftLog/issues/new')}
           title={t('settings.feature_request.title')}
@@ -144,34 +147,36 @@ export default function Settings() {
         />
       </SettingsGroup>
 
-      <Portal>
-        <Dialog visible={appInfoOpen} onDismiss={() => setAppInfoOpen(false)}>
-          <Dialog.Title>
-            <T keyName="settings.app_info.title" />
-          </Dialog.Title>
-          <Dialog.Content>
-            <Text>{t('settings.app_info.subtitle')}</Text>
-            <Text style={{ marginTop: spacing[3] }}>
-              LiftLog · AGPL-3.0 ·{' '}
-              <Link
-                style={{ color: colors.primary, fontWeight: 'bold' }}
-                href="https://github.com/gabsvm/LiftLog"
-              >
-                <Icon size={16} source={'share'} color={colors.primary} />
-                GitHub
-              </Link>
-            </Text>
-            <Text style={{ marginTop: spacing[2] }}>
-              GainsLab {appVersion}
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setAppInfoOpen(false)}>
-              <T keyName="generic.close.button" />
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      {appInfoOpen ? (
+        <Portal>
+          <Dialog visible onDismiss={() => setAppInfoOpen(false)}>
+            <Dialog.Title>
+              <T keyName="settings.app_info.title" />
+            </Dialog.Title>
+            <Dialog.Content>
+              <Text>{t('settings.app_info.subtitle')}</Text>
+              <Text style={{ marginTop: spacing[3] }}>
+                LiftLog · AGPL-3.0 ·{' '}
+                <Link
+                  style={{ color: colors.primary, fontWeight: 'bold' }}
+                  href="https://github.com/gabsvm/LiftLog"
+                >
+                  <Icon size={16} source={'share'} color={colors.primary} />
+                  GitHub
+                </Link>
+              </Text>
+              <Text style={{ marginTop: spacing[2] }}>
+                GainsLab {appVersion}
+              </Text>
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setAppInfoOpen(false)}>
+                <T keyName="generic.close.button" />
+              </Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+      ) : null}
     </FullHeightScrollView>
   );
 }
@@ -183,17 +188,23 @@ function SettingsGroup({
   title: string;
   children: React.ReactNode;
 }) {
-  const { colors } = useAppTheme();
   return (
     <View style={styles.group}>
       <SectionHeading title={title} />
-      <Card
-        mode="contained"
-        style={[styles.card, { backgroundColor: colors.surfaceContainer }]}
-      >
-        {children}
-      </Card>
+      <SettingsCard>{children}</SettingsCard>
     </View>
+  );
+}
+
+function SettingsCard({ children }: { children: React.ReactNode }) {
+  const { colors } = useAppTheme();
+  return (
+    <Card
+      mode="contained"
+      style={[styles.card, { backgroundColor: colors.surfaceContainer }]}
+    >
+      {children}
+    </Card>
   );
 }
 
