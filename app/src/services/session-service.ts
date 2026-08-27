@@ -14,21 +14,30 @@ import {
   RecordedWeightedExercise,
   Session,
 } from '@/models/session-models';
-import { ProgressRepository } from '@/services/progress-repository';
 import type { RootState } from '@/store';
+import {
+  getSessionReferenceTime,
+  selectLatestNonFreeformSession,
+} from '@/store/stored-sessions';
+import { KeyValueStore } from '@/services/key-value-store';
+import { sessionsSchema } from '@/db/schema';
+import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { uuid } from '@/utils/uuid';
 import { LocalDate } from '@js-joda/core';
 import { match } from 'ts-pattern';
 
+const latestSessionStorageKey = 'LatestNonFreeformSessionV1';
+
 export class SessionService {
   constructor(
-    private progressRepository: ProgressRepository,
+    private keyValueStore: KeyValueStore,
+    private db: ExpoSQLiteDatabase,
     private getState: () => RootState,
   ) {}
 
   async *getUpcomingSessions(
     sessionBlueprints: SessionBlueprint[],
-    latestExercises: Record<string, RecordedExercise | undefined>, // KeyedExerciseBlueprint -> Exercise
+    latestExercises: Record<string, RecordedExercise | undefined>,
   ): AsyncIterableIterator<Session> {
     const currentState = this.getState();
     const currentSession = currentState.currentSession.workoutSession;
@@ -41,9 +50,8 @@ export class SessionService {
 
     let latestSession =
       currentSession ??
-      this.progressRepository
-        .getOrderedSessions()
-        .firstOrDefault((x) => !x.isFreeform);
+      selectLatestNonFreeformSession(currentState) ??
+      (await this.loadLatestCompletedSession());
 
     await yieldToEventLoop();
     if (!latestSession) {
@@ -64,20 +72,63 @@ export class SessionService {
     }
   }
 
+  async rememberCompletedSession(session: Session): Promise<void> {
+    if (session.isFreeform) return;
+    await this.keyValueStore.setItem(
+      latestSessionStorageKey,
+      JSON.stringify(session.toJSON()),
+    );
+  }
+
+  async invalidateLatestCompletedSessionCache(): Promise<void> {
+    await this.keyValueStore.removeItem(latestSessionStorageKey);
+  }
+
   public hydrateSessionFromBlueprint(
     blueprint: SessionBlueprint,
-    latestExercises: Record<string, RecordedExercise | undefined>, // KeyedExerciseBlueprint -> Exercise
+    latestExercises: Record<string, RecordedExercise | undefined>,
   ): Session {
     return this.createNewSession(blueprint, latestExercises);
+  }
+
+  private async loadLatestCompletedSession(): Promise<Session | undefined> {
+    const cached = await this.keyValueStore.getItem(latestSessionStorageKey);
+    if (cached) {
+      try {
+        const session = Session.fromJSON(JSON.parse(cached));
+        if (!session.isFreeform) return session;
+      } catch {
+        await this.keyValueStore.removeItem(latestSessionStorageKey);
+      }
+    }
+
+    // Existing installs do this scan once. Future launches read a single small
+    // KV snapshot and never need the historical object graph to choose the next
+    // program session.
+    const rows = await this.db
+      .select({ payload: sessionsSchema.payload })
+      .from(sessionsSchema);
+    let latest: Session | undefined;
+    for (const row of rows) {
+      const session = Session.fromJSON(row.payload);
+      if (session.isFreeform) continue;
+      if (
+        !latest ||
+        getSessionReferenceTime(latest).isBefore(getSessionReferenceTime(session))
+      ) {
+        latest = session;
+      }
+    }
+    if (latest) {
+      await this.rememberCompletedSession(latest);
+    }
+    return latest;
   }
 
   private getNextSession(
     previousSession: Session,
     sessionBlueprints: SessionBlueprint[],
-    latestRecordedExercises: Record<
-      string, //KeyedExerciseBlueprint,
-      RecordedExercise | undefined
-    >,
+    latestRecordedExercises: Record<string, RecordedExercise | undefined>,
   ): Session {
     const lastBlueprint = previousSession.blueprint;
     const lastBlueprintIndex = sessionBlueprints.findIndex(
@@ -96,14 +147,9 @@ export class SessionService {
 
   private createNewSession(
     sessionBlueprint: SessionBlueprint,
-    latestRecordedExercises: Record<
-      string, //KeyedExerciseBlueprint,
-      RecordedExercise | undefined
-    >,
+    latestRecordedExercises: Record<string, RecordedExercise | undefined>,
   ): Session {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const $this = this;
-    function getNextExercise(e: ExerciseBlueprint): RecordedExercise {
+    const getNextExercise = (e: ExerciseBlueprint): RecordedExercise => {
       const lastExercise =
         latestRecordedExercises[
           KeyedExerciseBlueprint.fromExerciseBlueprint(e).toString()
@@ -134,12 +180,12 @@ export class SessionService {
             () =>
               new PotentialSet(
                 undefined,
-                new Weight(0, $this.getDefaultWeightUnit()),
+                new Weight(0, this.getDefaultWeightUnit()),
               ),
           ),
         )
         .otherwise((x) =>
-          x.potentialSets.map((x) => new PotentialSet(undefined, x.weight)),
+          x.potentialSets.map((set) => new PotentialSet(undefined, set.weight)),
         );
       let newExercise = new RecordedWeightedExercise(
         e,
@@ -152,9 +198,9 @@ export class SessionService {
             newExercise,
           );
       }
-
       return newExercise;
-    }
+    };
+
     return new Session(
       uuid(),
       sessionBlueprint,
@@ -170,5 +216,4 @@ export class SessionService {
   }
 }
 
-// Helper function to yield control back to the event loop
-const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 5));
+const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
