@@ -3,7 +3,6 @@ import ExerciseSearchAndFilters from '@/components/presentation/workout-editor/e
 import { ExerciseDescriptor } from '@/models/exercise-models';
 import { useAppSelector } from '@/store';
 import { selectExercises } from '@/store/stored-sessions';
-import Enumerable from 'linq';
 import { useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -15,74 +14,77 @@ export default function ExerciseFilterer(props: {
 }) {
   const exercises = useAppSelector(selectExercises);
   const { onFilteredExerciseIdsChange, onSuggestedNewExercise } = props;
-  const [muscleFilters, setMuscleFilters] = useState([] as string[]);
+  const [muscleFilters, setMuscleFilters] = useState<string[]>([]);
   const [searchText, setSearchText] = useState('');
 
-  const search = useDebouncedCallback(() => {
-    const trimmed = searchText.trim();
-    const trimmedSearchText = escapeRegExp(trimmed);
-    const fullMatchRegex = new RegExp('^' + trimmedSearchText + '$', 'i');
-    let hasExactMatch = false;
-    const newFilteredExercises = Enumerable.from(Object.entries(exercises))
-      .select((x) => ({
-        entry: { id: x[0], exercise: x[1] },
-        score: trimmedSearchText
-          ? fuzzyMatchScore(trimmedSearchText, x[1].name)
-          : 0,
-      }))
-      .where(
-        (x) =>
-          (!muscleFilters.length ||
-            x.entry.exercise.muscles.some((exerciseMuscle) =>
-              muscleFilters.includes(exerciseMuscle),
-            )) &&
-          (!trimmedSearchText || x.score !== null),
-      )
-      .orderByDescending((x) => x.score ?? 0)
-      .thenBy((x) => x.entry.exercise.name)
-      .doAction((x) => {
+  const search = useDebouncedCallback(
+    (rawSearchText: string, activeMuscleFilters: string[]) => {
+      const trimmed = rawSearchText.trim();
+      const muscleSet = new Set(activeMuscleFilters);
+      let hasExactMatch = false;
+      const ranked: Array<{
+        id: string;
+        name: string;
+        score: number;
+      }> = [];
+
+      for (const [id, exercise] of Object.entries(exercises)) {
         if (
-          !hasExactMatch &&
-          trimmedSearchText &&
-          fullMatchRegex.test(x.entry.exercise.name)
+          muscleSet.size > 0 &&
+          !exercise.muscles.some((muscle) => muscleSet.has(muscle))
+        ) {
+          continue;
+        }
+
+        const score = trimmed ? fuzzyMatchScore(trimmed, exercise.name) : 0;
+        if (trimmed && score === null) continue;
+
+        if (
+          trimmed &&
+          exercise.name.localeCompare(trimmed, undefined, {
+            sensitivity: 'base',
+          }) === 0
         ) {
           hasExactMatch = true;
         }
-      })
-      .select((x) => x.entry.id)
-      .toArray();
-    onFilteredExerciseIdsChange(newFilteredExercises);
-    if (!hasExactMatch && trimmedSearchText) {
-      onSuggestedNewExercise({
-        name: trimmed,
-        category: '',
-        equipment: null,
-        force: null,
-        instructions: '',
-        level: '',
-        mechanic: '',
-        muscles: muscleFilters,
-      });
-    } else {
-      onSuggestedNewExercise('NONE');
-    }
-  }, 100);
+        ranked.push({ id, name: exercise.name, score: score ?? 0 });
+      }
+
+      ranked.sort(
+        (a, b) => b.score - a.score || a.name.localeCompare(b.name),
+      );
+      onFilteredExerciseIdsChange(ranked.map((item) => item.id));
+
+      if (!hasExactMatch && trimmed) {
+        onSuggestedNewExercise({
+          name: trimmed,
+          category: '',
+          equipment: null,
+          force: null,
+          instructions: '',
+          level: '',
+          mechanic: '',
+          muscles: activeMuscleFilters,
+        });
+      } else {
+        onSuggestedNewExercise('NONE');
+      }
+    },
+    100,
+  );
 
   return (
     <ExerciseSearchAndFilters
       searchText={searchText}
-      setSearchText={(s) => {
-        setSearchText(s);
-        search();
+      setSearchText={(nextText) => {
+        setSearchText(nextText);
+        search(nextText, muscleFilters);
       }}
       muscleFilters={muscleFilters}
-      setMuscleFilters={(m) => {
-        setMuscleFilters(m);
-        search();
+      setMuscleFilters={(nextMuscles) => {
+        setMuscleFilters(nextMuscles);
+        search(searchText, nextMuscles);
       }}
     />
   );
-}
-function escapeRegExp(string: string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
