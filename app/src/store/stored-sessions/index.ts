@@ -24,13 +24,12 @@ export interface WeightMigrateableExercise {
 const RECENT_EXERCISES_PER_NAME = 10;
 
 interface StoredSessionState {
-  // Core exercise/progression state is ready. This intentionally does not mean
-  // that the entire workout history has been materialized in Redux.
   isHydrated: boolean;
   isHistoryHydrated: boolean;
   sessions: Record<string, Session>;
-  latestExercises: Record<string, RecordedExercise | undefined>; // KeyedExerciseBlueprint -> RecordedExercise
+  latestExercises: Record<string, RecordedExercise | undefined>;
   recentExercises: Record<NormalizedNameKey, RecordedExercise[]>;
+  latestNonFreeformSession: Session | undefined;
   savedExercises: Record<string, ExerciseDescriptor>;
   filteredExerciseIds: string[];
   exercisesRequiringWeightMigration: WeightMigrateableExercise[];
@@ -43,6 +42,7 @@ const initialState: StoredSessionState = {
   sessions: {},
   latestExercises: {},
   recentExercises: {},
+  latestNonFreeformSession: undefined,
   savedExercises: {},
   filteredExerciseIds: [],
   exercisesRequiringWeightMigration: [],
@@ -68,6 +68,12 @@ const storedSessionsSlice = createSlice({
     ) {
       state.recentExercises = action.payload;
     },
+    setLatestNonFreeformSession(
+      state,
+      action: PayloadAction<Session | undefined>,
+    ) {
+      state.latestNonFreeformSession = action.payload;
+    },
     setProgressionSessions(state, action: PayloadAction<Session[]>) {
       resetDerivatives(state);
       for (const session of action.payload) {
@@ -79,7 +85,6 @@ const storedSessionsSlice = createSlice({
       state.isHistoryHydrated = true;
       rebuildDerivatives(state);
     },
-
     upsertStoredSessions(state, action: PayloadAction<Session[]>) {
       let replacesExistingSession = false;
       action.payload.forEach((session) => {
@@ -88,14 +93,11 @@ const storedSessionsSlice = createSlice({
       });
 
       if (replacesExistingSession && state.isHistoryHydrated) {
-        // A replacement can remove exercises or move timestamps backwards, so
-        // incrementally applying only the new value can leave stale derivatives.
         rebuildDerivatives(state);
       } else {
         action.payload.forEach((session) => updateDerivatives(state, session));
       }
     },
-
     addStoredSession(state, action: PayloadAction<Session>) {
       const replacesExistingSession =
         state.sessions[action.payload.id] !== undefined;
@@ -106,13 +108,10 @@ const storedSessionsSlice = createSlice({
         updateDerivatives(state, action.payload);
       }
     },
-
     deleteStoredSession(state, action: PayloadAction<string>) {
       const deletedSession = state.sessions[action.payload];
       delete state.sessions[action.payload];
-
       if (!deletedSession) return;
-
       if (state.isHistoryHydrated) {
         rebuildDerivatives(state);
       }
@@ -151,10 +150,11 @@ const storedSessionsSlice = createSlice({
       if (val) val.unit = action.payload.unit;
     },
   },
-
   selectors: {
     selectLatestExercises: (state: StoredSessionState) => state.latestExercises,
     selectRecentExercises: (state: StoredSessionState) => state.recentExercises,
+    selectLatestNonFreeformSession: (state: StoredSessionState) =>
+      state.latestNonFreeformSession,
     selectIsHistoryHydrated: (state: StoredSessionState) =>
       state.isHistoryHydrated,
     selectSessions: createSelector(
@@ -180,7 +180,6 @@ const storedSessionsSlice = createSlice({
         return [...names];
       },
     ),
-
     selectExercises: (state: StoredSessionState) => state.savedExercises,
     selectExerciseById: createSelector(
       [
@@ -189,7 +188,6 @@ const storedSessionsSlice = createSlice({
       ],
       (exercises, id) => exercises[id],
     ),
-
     selectExerciseIds: (state: StoredSessionState) =>
       Object.keys(state.savedExercises),
   },
@@ -198,6 +196,7 @@ const storedSessionsSlice = createSlice({
 function resetDerivatives(state: WritableDraft<StoredSessionState>) {
   state.latestExercises = {};
   state.recentExercises = {};
+  state.latestNonFreeformSession = undefined;
   state.earliestSession = undefined;
 }
 
@@ -218,7 +217,18 @@ function updateDerivatives(
   ) {
     state.earliestSession = session;
   }
-  session.recordedExercises.forEach((exercise) => {
+
+  if (!session.isFreeform) {
+    const latest = state.latestNonFreeformSession as Session | undefined;
+    if (
+      !latest ||
+      getSessionReferenceTime(latest).isBefore(getSessionReferenceTime(session))
+    ) {
+      state.latestNonFreeformSession = session;
+    }
+  }
+
+  for (const exercise of session.recordedExercises) {
     const key = KeyedExerciseBlueprint.fromExerciseBlueprint(
       exercise.blueprint,
     ).toString();
@@ -232,7 +242,7 @@ function updateDerivatives(
       state.latestExercises[key] = exercise;
     }
 
-    if (!exercise.isStarted) return;
+    if (!exercise.isStarted) continue;
     const normalizedKey = NormalizedName.fromExerciseBlueprint(
       exercise.blueprint,
     ).toString();
@@ -247,7 +257,7 @@ function updateDerivatives(
       recent.length = RECENT_EXERCISES_PER_NAME;
     }
     state.recentExercises[normalizedKey] = recent;
-  });
+  }
 }
 
 export const selectSessionsBy = createSelector(
@@ -268,7 +278,6 @@ export const initializeStoredSessionsStateSlice = createAction(
   'initializeStoredSessionsStateSlice',
 );
 export const ensureHistoryHydrated = createAction('ensureHistoryHydrated');
-
 export const migrateExerciseWeights = createAction('migrateExerciseWeights');
 export const checkIfWeightMigrationRequired = createAction(
   'checkIfWeightMigrationRequired',
@@ -278,6 +287,7 @@ export const {
   setIsHydrated,
   setLatestExercises,
   setRecentExercises,
+  setLatestNonFreeformSession,
   setProgressionSessions,
   setStoredSessions,
   upsertStoredSessions,
@@ -297,6 +307,7 @@ export const {
   selectExercises,
   selectLatestExercises,
   selectRecentExercises,
+  selectLatestNonFreeformSession,
   selectIsHistoryHydrated,
   selectExerciseById,
 } = storedSessionsSlice.selectors;
@@ -316,14 +327,11 @@ export const selectRecentlyCompletedExercises = createSelector(
 export const selectPreviousComparableSession = createSelector(
   [selectSessions, (_, session: Session | undefined) => session],
   (sessions, session) => {
-    if (!session) {
-      return undefined;
-    }
+    if (!session) return undefined;
 
     const referenceEpochSecond = getSessionReferenceTime(session).toEpochSecond();
     let bestSession: Session | undefined;
     let bestEpochSecond = Number.NEGATIVE_INFINITY;
-
     for (const storedSession of sessions) {
       if (
         storedSession.id === session.id ||
