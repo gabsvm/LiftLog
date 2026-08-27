@@ -229,7 +229,7 @@ export default function SessionComponent(props: {
     <View style={{ flex: 1 }}>
       <RestTimer
         rest={lastExercise.blueprint.restBetweenSets}
-        startTime={session.restTimerStartTime!}
+        startTime={session.restTimerStartTime}
         failed={!!lastSetFailed}
         resetTimer={() => resetTimer(OffsetDateTime.now())}
       />
@@ -430,7 +430,7 @@ const MemoizedSessionExerciseItem = memo(
 
     return (
       <CardioExercise
-        recordedExercise={recordedExercise as RecordedCardioExercise}
+        recordedExercise={recordedExercise}
         updateExercise={updateCardioExercise}
         toStartNext={toStartNext}
         onEditExercise={editExercise}

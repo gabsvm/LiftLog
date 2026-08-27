@@ -69,6 +69,7 @@ export function addRemoteBackupEffects(addEffect: AddEffectFn) {
         });
         logger.debug(
           `Calculated remote backup hash in ${(performance.now() - start).toFixed(2)} ms`,
+          undefined,
         );
 
         if (

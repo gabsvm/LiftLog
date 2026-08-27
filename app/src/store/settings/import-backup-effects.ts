@@ -97,9 +97,11 @@ export function addImportBackupEffects(addEffect: AddEffectFn) {
       // existing DB history once before applying the imported rows so replacements
       // can rebuild latest/recent exercise derivatives exactly even when normal
       // app startup kept history lazy.
-      const existingSessions = (await db.select().from(sessionsSchema)).map(
-        (row) => Session.fromJSON(row.payload),
-      );
+      const existingSessions = db
+        ? (await db.select().from(sessionsSchema)).map((row) =>
+            Session.fromJSON(row.payload),
+          )
+        : [];
       const mergedSessions = Object.fromEntries(
         existingSessions
           .concat(dao.workouts)

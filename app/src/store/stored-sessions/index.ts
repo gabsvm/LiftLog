@@ -258,11 +258,11 @@ function updateDerivatives(
     ).toString();
     const recent = state.recentExercises[normalizedKey] ?? [];
     recent.push(exercise);
-    recent.sort((a, b) =>
-      (b.latestTime ?? OffsetDateTime.MIN).compareTo(
-        a.latestTime ?? OffsetDateTime.MIN,
-      ),
-    );
+    recent.sort((a, b) => {
+      const bTime = b.latestTime ?? OffsetDateTime.MIN;
+      const aTime = a.latestTime ?? OffsetDateTime.MIN;
+      return bTime.compareTo(aTime as OffsetDateTime);
+    });
     if (recent.length > RECENT_EXERCISES_PER_NAME) {
       recent.length = RECENT_EXERCISES_PER_NAME;
     }

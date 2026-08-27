@@ -25,6 +25,7 @@ import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { uuid } from '@/utils/uuid';
 import { LocalDate } from '@js-joda/core';
 import { match } from 'ts-pattern';
+import type { SessionJSON } from '@/models/storage/versions/latest';
 
 const latestSessionStorageKey = 'LatestNonFreeformSessionV1';
 
@@ -95,7 +96,7 @@ export class SessionService {
     const cached = await this.keyValueStore.getItem(latestSessionStorageKey);
     if (cached) {
       try {
-        const session = Session.fromJSON(JSON.parse(cached));
+        const session = Session.fromJSON(JSON.parse(cached) as SessionJSON);
         if (!session.isFreeform) return session;
       } catch {
         await this.keyValueStore.removeItem(latestSessionStorageKey);

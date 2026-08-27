@@ -228,7 +228,7 @@ export function calculateStats(
 
       for (const [reps, count] of repsInExercise) {
         exerciseStats.repsStatistics.breakdown[reps] ??= { numberOfSets: 0 };
-        exerciseStats.repsStatistics.breakdown[reps]!.numberOfSets += count;
+        exerciseStats.repsStatistics.breakdown[reps].numberOfSets += count;
       }
 
       if (exerciseStats.latestTime.isBefore(latestSetTime)) {

@@ -80,7 +80,7 @@ export function addSharedItemEffects(addEffect: AddEffectFn) {
       }
 
       if (!identity) {
-        logger.debug('Identity unavailable after on-demand initialization');
+        logger.debug('Identity unavailable after on-demand initialization', undefined);
         dispatch(
           feedApiError({
             error: {

@@ -22,11 +22,11 @@ export default function ExerciseFilterer(props: {
       const trimmed = rawSearchText.trim();
       const muscleSet = new Set(activeMuscleFilters);
       let hasExactMatch = false;
-      const ranked: Array<{
+      const ranked: {
         id: string;
         name: string;
         score: number;
-      }> = [];
+      }[] = [];
 
       for (const [id, exercise] of Object.entries(exercises)) {
         if (

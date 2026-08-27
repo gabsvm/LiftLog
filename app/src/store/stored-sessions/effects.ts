@@ -26,7 +26,6 @@ import {
 import { fetchUpcomingSessions } from '@/store/program';
 import {
   fromRecordedExerciseJSON,
-  RecordedExercise,
   RecordedWeightedExercise,
   Session,
 } from '@/models/session-models';
@@ -268,7 +267,7 @@ export function applyStoredSessionsEffects(addEffect: AddEffectFn) {
                             : ps.weight.unit,
                       }),
                     }),
-                  }),
+                  ),
                 })
               : re,
           ),
@@ -463,7 +462,7 @@ async function seedBuiltInExercises(
     (await keyValueStore.getItem(addedBuiltInExerciseIdsStorageKey)) ?? '[]',
   ) as string[];
   const previouslyAddedIds = new Set(addedInThePast);
-  const newEntries: Array<{ id: string; exercise: ExerciseDescriptor }> = [];
+  const newEntries: { id: string; exercise: ExerciseDescriptor }[] = [];
 
   for (const builtIn of builtInExerciseList) {
     if (previouslyAddedIds.has(builtIn.name)) continue;
@@ -542,11 +541,11 @@ async function persistProgressionCache(
   const recent: Record<string, RecordedExerciseJSON[]> = {};
 
   for (const [key, exercise] of Object.entries(latestExercises)) {
-    if (exercise) exercises[key] = (exercise as RecordedExercise).toJSON();
+    if (exercise) exercises[key] = exercise.toJSON();
   }
   for (const [key, recordedExercises] of Object.entries(recentExercises)) {
     recent[key] = recordedExercises.map((exercise) =>
-      (exercise as RecordedExercise).toJSON(),
+      exercise.toJSON(),
     );
   }
 

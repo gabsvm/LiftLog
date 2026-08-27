@@ -3,7 +3,7 @@ import {
   RecordedExercise,
   Session,
 } from '@/models/session-models';
-import { AddEffectFn } from '@/store/store';
+import type { AddEffectFn } from '@/store/store';
 import { exportPlainText } from '@/store/settings';
 import Enumerable from 'linq';
 import { match } from 'ts-pattern';
@@ -11,15 +11,23 @@ import BigNumber from 'bignumber.js';
 import { jsonToCSV } from 'react-native-csv';
 import { shortFormatWeightUnit } from '@/models/weight';
 import { DateTimeFormatter, LocalDateTime } from '@js-joda/core';
+import { sessionsSchema } from '@/db/schema';
+import { TemporalComparer } from '@/models/comparers';
+import { getSessionReferenceTime } from '@/store/stored-sessions';
+import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
 export function addExportPlaintextEffects(addEffect: AddEffectFn) {
   addEffect(
     exportPlainText,
     async (
       { payload: { format } },
-      { extra: { progressRepository, fileExportService } },
+      { extra, getState },
     ) => {
-      const sessions = progressRepository.getOrderedSessions();
+      const { fileExportService } = extra;
+      const sessions =
+        extra.db && !getState().storedSessions?.isHistoryHydrated
+          ? await loadSessionsFromDatabase(extra.db)
+          : extra.progressRepository.getOrderedSessions();
       const now = LocalDateTime.now()
         .withNano(0)
         .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
@@ -49,6 +57,16 @@ export function addExportPlaintextEffects(addEffect: AddEffectFn) {
 
       await fileExportService.exportBytes(fileName, bytes, contentType);
     },
+  );
+}
+
+async function loadSessionsFromDatabase(
+  db: ExpoSQLiteDatabase,
+): Promise<Enumerable.IEnumerable<Session>> {
+  const rows = await db.select().from(sessionsSchema);
+  return Enumerable.from(rows.map((row) => Session.fromJSON(row.payload))).orderByDescending(
+    (session) => getSessionReferenceTime(session),
+    TemporalComparer,
   );
 }
 

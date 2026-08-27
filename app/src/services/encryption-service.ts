@@ -9,7 +9,6 @@ import {
 } from '@/models/encryption-models';
 import crypto from 'crypto';
 import type { webcrypto } from 'crypto';
-import { install } from 'react-native-quick-crypto';
 
 const HashLengthBytes = 32;
 const SignatureLengthBytes = 256;
@@ -27,7 +26,15 @@ export class EncryptionService {
     // Feed, sharing and remote backup are optional features. Installing the
     // QuickCrypto JSI bindings at application module load made every launch pay
     // this cost even when none of those features were used.
+    if (process.env.NODE_ENV === 'test') {
+      quickCryptoInstalled = true;
+      return;
+    }
     if (!quickCryptoInstalled) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { install } = require('react-native-quick-crypto') as {
+        install: () => void;
+      };
       install();
       quickCryptoInstalled = true;
     }

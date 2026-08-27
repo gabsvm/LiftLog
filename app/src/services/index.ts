@@ -7,6 +7,7 @@ import type { FeedInboxDecryptionService } from '@/services/feed-inbox-decryptio
 import type { FileExportService } from '@/services/file-export-service';
 import type { FilePickerService } from '@/services/file-picker-service';
 import type { NotificationService } from '@/services/notification-service';
+import type { ProgressRepository } from '@/services/progress-repository';
 import type { StringSharer } from '@/services/string-sharer';
 import { KeyValueStore } from '@/services/key-value-store';
 import { Logger } from '@/services/logger';
@@ -61,13 +62,16 @@ function resolveServicesInternal(
   let stringSharer: StringSharer | undefined;
   let fileExportService: FileExportService | undefined;
   let filePickerService: FilePickerService | undefined;
+  let progressRepository: ProgressRepository | undefined;
   let aiChatService: AiChatService | undefined;
   let healthExportService: HES | undefined;
 
   const getEncryptionService = (): EncryptionService => {
     if (!encryptionService) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { EncryptionService: Service } = require('./encryption-service') as typeof import('./encryption-service');
+      const { EncryptionService: Service } = require('./encryption-service') as {
+        EncryptionService: new () => EncryptionService;
+      };
       encryptionService = new Service();
     }
     return encryptionService;
@@ -76,7 +80,9 @@ function resolveServicesInternal(
   const getFeedApiService = (): FeedApiService => {
     if (!feedApiService) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { FeedApiService: Service } = require('./feed-api') as typeof import('./feed-api');
+      const { FeedApiService: Service } = require('./feed-api') as {
+        FeedApiService: new () => FeedApiService;
+      };
       feedApiService = new Service();
     }
     return feedApiService;
@@ -86,6 +92,16 @@ function resolveServicesInternal(
     logger,
     keyValueStore,
     sessionService,
+    get progressRepository(): ProgressRepository {
+      if (!progressRepository) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { ProgressRepository: Service } = require('./progress-repository') as {
+          ProgressRepository: new (getState: () => RootState) => ProgressRepository;
+        };
+        progressRepository = new Service(store.getState);
+      }
+      return progressRepository;
+    },
     preferenceService,
     workoutWorkerService,
     tolgee,
@@ -96,7 +112,12 @@ function resolveServicesInternal(
     get notificationService(): NotificationService {
       if (!notificationService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { NotificationService: Service } = require('./notification-service') as typeof import('./notification-service');
+        const { NotificationService: Service } = require('./notification-service') as {
+          NotificationService: new (
+            getState: () => RootState,
+            dispatch: Store<RootState>['dispatch'],
+          ) => NotificationService;
+        };
         notificationService = new Service(store.getState, store.dispatch);
       }
       return notificationService;
@@ -110,7 +131,12 @@ function resolveServicesInternal(
     get feedIdentityService(): FeedIdentityService {
       if (!feedIdentityService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { FeedIdentityService: Service } = require('./feed-identity-service') as typeof import('./feed-identity-service');
+        const { FeedIdentityService: Service } = require('./feed-identity-service') as {
+          FeedIdentityService: new (
+            feedApiService: FeedApiService,
+            encryptionService: EncryptionService,
+          ) => FeedIdentityService;
+        };
         feedIdentityService = new Service(
           getFeedApiService(),
           getEncryptionService(),
@@ -121,7 +147,12 @@ function resolveServicesInternal(
     get feedInboxDecryptionService(): FeedInboxDecryptionService {
       if (!feedInboxDecryptionService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { FeedInboxDecryptionService: Service } = require('./feed-inbox-decryption-service') as typeof import('./feed-inbox-decryption-service');
+        const { FeedInboxDecryptionService: Service } = require('./feed-inbox-decryption-service') as {
+          FeedInboxDecryptionService: new (
+            encryptionService: EncryptionService,
+            feedApiService: FeedApiService,
+          ) => FeedInboxDecryptionService;
+        };
         feedInboxDecryptionService = new Service(
           getEncryptionService(),
           getFeedApiService(),
@@ -132,7 +163,12 @@ function resolveServicesInternal(
     get feedFollowService(): FeedFollowService {
       if (!feedFollowService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { FeedFollowService: Service } = require('./feed-follow-service') as typeof import('./feed-follow-service');
+        const { FeedFollowService: Service } = require('./feed-follow-service') as {
+          FeedFollowService: new (
+            feedApiService: FeedApiService,
+            encryptionService: EncryptionService,
+          ) => FeedFollowService;
+        };
         feedFollowService = new Service(
           getFeedApiService(),
           getEncryptionService(),
@@ -143,7 +179,9 @@ function resolveServicesInternal(
     get stringSharer(): StringSharer {
       if (!stringSharer) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { StringSharer: Service } = require('./string-sharer') as typeof import('./string-sharer');
+        const { StringSharer: Service } = require('./string-sharer') as {
+          StringSharer: new () => StringSharer;
+        };
         stringSharer = new Service();
       }
       return stringSharer;
@@ -151,7 +189,9 @@ function resolveServicesInternal(
     get fileExportService(): FileExportService {
       if (!fileExportService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { FileExportService: Service } = require('./file-export-service') as typeof import('./file-export-service');
+        const { FileExportService: Service } = require('./file-export-service') as {
+          FileExportService: new () => FileExportService;
+        };
         fileExportService = new Service();
       }
       return fileExportService;
@@ -159,7 +199,9 @@ function resolveServicesInternal(
     get filePickerService(): FilePickerService {
       if (!filePickerService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { FilePickerService: Service } = require('./file-picker-service') as typeof import('./file-picker-service');
+        const { FilePickerService: Service } = require('./file-picker-service') as {
+          FilePickerService: new () => FilePickerService;
+        };
         filePickerService = new Service();
       }
       return filePickerService;
@@ -167,9 +209,16 @@ function resolveServicesInternal(
     get aiChatService(): AiChatService {
       if (!aiChatService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { AiChatService: Service } = require('./ai-chat-service') as typeof import('./ai-chat-service');
+        const { AiChatService: Service } = require('./ai-chat-service') as {
+          AiChatService: new (
+            hubConnectionFactory: unknown,
+            getState: () => RootState,
+          ) => AiChatService;
+        };
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { HubConnectionFactory } = require('./hub-connection-factory') as typeof import('./hub-connection-factory');
+        const { HubConnectionFactory } = require('./hub-connection-factory') as {
+          HubConnectionFactory: new () => unknown;
+        };
         aiChatService = new Service(new HubConnectionFactory(), store.getState);
       }
       return aiChatService;
@@ -177,7 +226,9 @@ function resolveServicesInternal(
     get healthExportService(): HES {
       if (!healthExportService) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { HealthExportService: Service } = require('./health-export-service') as typeof import('./health-export-service');
+        const { HealthExportService: Service } = require('./health-export-service') as {
+          HealthExportService: new () => HES;
+        };
         healthExportService = new Service();
       }
       return healthExportService;

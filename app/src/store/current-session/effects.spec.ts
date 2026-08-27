@@ -10,6 +10,10 @@ import { applyCurrentSessionEffects } from '@/store/current-session/effects';
 import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
 import { EmptySession } from '@/models/session-models';
 
+vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
+}));
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeKeyValueStore(
@@ -153,9 +157,11 @@ describe('current-session effects', () => {
         setCurrentSession({ target: 'workoutSession', session: undefined }),
       );
 
-      expect(kvStore.setItem).toHaveBeenCalledWith(
-        'CurrentSessionStateV1-Version',
-        '3',
+      await vi.waitFor(() =>
+        expect(kvStore.setItem).toHaveBeenCalledWith(
+          'CurrentSessionStateV1-Version',
+          '3',
+        ),
       );
       expect(kvStore.removeItem).toHaveBeenCalledWith('CurrentSessionStateV1');
     });
@@ -254,7 +260,7 @@ describe('current-session effects', () => {
       testBed.setState({
         currentSession: {
           isHydrated: true,
-          workoutSession: { id: 'new' },
+          workoutSession: EmptySession,
           historySession: undefined,
         },
       });
@@ -265,9 +271,11 @@ describe('current-session effects', () => {
         ),
       ).resolves.not.toThrow();
 
-      expect(testBed.mockServices.logger.error).toHaveBeenCalledWith(
-        'Failed to persist current session state',
-        expect.objectContaining({ message: 'disk full' }),
+      await vi.waitFor(() =>
+        expect(testBed.mockServices.logger.error).toHaveBeenCalledWith(
+          'Failed to persist current session state',
+          expect.objectContaining({ message: 'disk full' }),
+        ),
       );
     });
   });

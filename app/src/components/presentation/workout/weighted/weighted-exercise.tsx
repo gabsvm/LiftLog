@@ -37,7 +37,7 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
       isReadonly={props.isReadonly}
       showPreviousButton={props.showPreviousButton}
       updateExercise={(exercise) =>
-        updateExercise(exercise as RecordedWeightedExercise)
+        updateExercise(exercise)
       }
       onEditExercise={props.onEditExercise}
       onRemoveExercise={props.onRemoveExercise}

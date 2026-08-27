@@ -25,7 +25,7 @@ export class DatabaseMigrationService {
     private readonly db: ExpoSQLiteDatabase,
     private readonly logger: Logger,
     private readonly importService: DatabaseImporter,
-    private readonly keyValueStore: KeyValueStore,
+    private readonly keyValueStore?: Pick<KeyValueStore, 'getItem' | 'setItem'>,
   ) {}
 
   async migrate(): Promise<void> {
@@ -33,7 +33,7 @@ export class DatabaseMigrationService {
     await migrate(this.db, migrations);
     await this.importService.importOldData();
 
-    const storedSignature = await this.keyValueStore.getItem(
+    const storedSignature = await this.keyValueStore?.getItem(
       latestDataMigrationSignatureStorageKey,
     );
     if (storedSignature !== latestDataMigrationSignature) {
@@ -46,7 +46,7 @@ export class DatabaseMigrationService {
       await updateFeedFollowerUsersToLatestVersion(this.db);
       await updateFeedFollowRequestsToLatestVersion(this.db);
       await updateFeedPendingUsersToLatestVersion(this.db);
-      await this.keyValueStore.setItem(
+      await this.keyValueStore?.setItem(
         latestDataMigrationSignatureStorageKey,
         latestDataMigrationSignature,
       );

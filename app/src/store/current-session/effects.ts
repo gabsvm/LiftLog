@@ -332,11 +332,12 @@ async function persistWorkoutSessionSnapshot(
   session: Session | undefined,
   keyValueStore: KeyValueStore,
 ) {
+  if (!storageVersionWrittenThisRun) {
+    await keyValueStore.setItem(storageVersionKey, '3');
+    storageVersionWrittenThisRun = true;
+  }
+
   if (session) {
-    if (!storageVersionWrittenThisRun) {
-      await keyValueStore.setItem(storageVersionKey, '3');
-      storageVersionWrittenThisRun = true;
-    }
     await keyValueStore.setItem(storageKey, toJsonString(session.toJSON()));
     return;
   }
