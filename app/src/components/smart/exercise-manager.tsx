@@ -2,14 +2,22 @@ import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { useTranslate } from '@tolgee/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent, View } from 'react-native';
-import { AnimatedFAB, Icon, List, TextInput } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  AnimatedFAB,
+  Icon,
+  List,
+  TextInput,
+} from 'react-native-paper';
 import TouchableRipple from '@/components/presentation/foundation/gesture-wrappers/touchable-ripple';
 import { AccordionItem } from '@/components/presentation/foundation/accordion-item';
 import { useScroll } from '@/hooks/useScrollListener';
 import {
   deleteExercise as deleteExerciseAction,
+  ensureExercisesHydrated,
   selectExerciseById,
   selectExercises,
+  selectIsExercisesHydrated,
   setFilteredExerciseIds as setFilteredExerciseIdsAction,
   updateExercise,
 } from '@/store/stored-sessions';
@@ -18,7 +26,6 @@ import { useDispatch, useStore } from 'react-redux';
 import { uuid } from '@/utils/uuid';
 import { SwipeRow } from 'react-native-swipe-list-view';
 import { showSnackbar } from '@/store/app';
-import { useMountEffect } from '@/hooks/useMountEffect';
 import ExerciseMuscleSelector from '@/components/presentation/workout-editor/exercise-muscle-selector';
 import ExerciseFilterer from '@/components/presentation/workout-editor/exercise-filterer';
 import { LegendList } from '@legendapp/list';
@@ -37,14 +44,12 @@ function ExerciseListItem({
   const exercise = useAppSelectorWithArg(selectExerciseById, exerciseId);
   const [expanded, setExpanded] = useState(expand);
   const [listExpanded, setListExpanded] = useState(expand);
-
   const rowRef = useRef<SwipeRow<unknown>>(null);
+
   useEffect(() => {
     rowRef.current?.closeRowWithoutAnimation();
   }, [exerciseId]);
-  if (!exercise) {
-    return <View></View>;
-  }
+  if (!exercise) return <View />;
 
   return (
     // @ts-expect-error -- Swipe row seems to have trouble with typescript, it works
@@ -72,22 +77,18 @@ function ExerciseListItem({
             justifyContent: 'center',
             alignItems: 'center',
           }}
-          testID={`exercise-delete-btn`}
+          testID="exercise-delete-btn"
         >
           <Icon source={'delete'} size={30} color={colors.onError} />
         </TouchableRipple>
       </View>
       <List.Accordion
         title={exercise.name}
-        // Important to have a space to ensure they are all the same size
-        // Otherwise delete button can show through when there is no desc
         description={exercise.muscles.join(', ') || ' '}
         descriptionNumberOfLines={1}
         expanded={listExpanded}
         onPress={() => {
-          if (rowRef.current?.isOpen) {
-            return;
-          }
+          if (rowRef.current?.isOpen) return;
           if (!expanded) {
             setListExpanded(true);
             setExpanded(true);
@@ -95,16 +96,13 @@ function ExerciseListItem({
             setExpanded(false);
           }
         }}
-        testID={`exercise-accordion`}
+        testID="exercise-accordion"
       >
         <AccordionItem
           isExpanded={expanded}
           onToggled={(isOpen) => {
             setExpanded(isOpen);
-            if (!isOpen) {
-              // Wait until collapse finishes before unmounting
-              setListExpanded(false);
-            }
+            if (!isOpen) setListExpanded(false);
           }}
         >
           <ExerciseEditSheet exercise={exercise} exerciseId={exerciseId} />
@@ -118,17 +116,26 @@ export default function ExerciseManager() {
   const dispatch = useDispatch();
   const { t } = useTranslate();
   const { getState } = useStore<RootState>();
+  const exercisesHydrated = useAppSelector(selectIsExercisesHydrated);
   const exercises = useAppSelector(selectExercises);
   const filteredExerciseIds = useAppSelector(
     (s) => s.storedSessions.filteredExerciseIds,
   );
+  const initializedFilters = useRef(false);
+
+  useEffect(() => {
+    dispatch(ensureExercisesHydrated());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!exercisesHydrated || initializedFilters.current) return;
+    initializedFilters.current = true;
+    dispatch(setFilteredExerciseIdsAction(Object.keys(exercises)));
+  }, [dispatch, exercises, exercisesHydrated]);
+
   const setFilteredExerciseIds = (ids: string[]) => {
     dispatch(setFilteredExerciseIdsAction(ids));
   };
-
-  useMountEffect(() => {
-    setFilteredExerciseIds(Object.keys(exercises));
-  });
 
   const addExercise = () => {
     const newId = uuid();
@@ -152,9 +159,7 @@ export default function ExerciseManager() {
 
   const deleteExercise = (id: string) => {
     const exercise = getState().storedSessions.savedExercises[id];
-    if (!exercise) {
-      return;
-    }
+    if (!exercise) return;
 
     setFilteredExerciseIds(filteredExerciseIds.filter((x) => x !== id));
     dispatch(deleteExerciseAction(id));
@@ -176,14 +181,25 @@ export default function ExerciseManager() {
   );
   const { handleScroll } = useScroll();
   const [fabExtended, setFabExtended] = useState(true);
-  const [lastScrollPosition, setLastScrollPosition] = useState(0);
+  const lastScrollPosition = useRef(0);
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     handleScroll(e);
-    setFabExtended(
-      e.nativeEvent.contentOffset.y <= Math.max(lastScrollPosition, 0),
+    const current = e.nativeEvent.contentOffset.y;
+    const shouldExtend = current <= Math.max(lastScrollPosition.current, 0);
+    setFabExtended((previous) =>
+      previous === shouldExtend ? previous : shouldExtend,
     );
-    setLastScrollPosition(e.nativeEvent.contentOffset.y);
+    lastScrollPosition.current = current;
   };
+
+  if (!exercisesHydrated) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <LegendList
