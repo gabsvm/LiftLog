@@ -8,7 +8,8 @@ import {
 import { T } from '@tolgee/react';
 import { ReactNode, useEffect } from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
-import { Button, Text } from 'react-native-paper';
+import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import * as SplashScreen from 'expo-splash-screen';

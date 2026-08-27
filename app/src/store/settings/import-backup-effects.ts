@@ -133,6 +133,10 @@ export function addImportBackupEffects(addEffect: AddEffectFn) {
       });
 
       await migrator.migrate();
+      // The main migration path intentionally leaves Feed payload migration
+      // lazy. A SQL backup is read in full here, so migrate its Feed rows
+      // before deserializing them into the restore payload.
+      await migrator.migrateFeedData();
       const workouts = (
         await drizzleBackupDb.select().from(sessionsSchema)
       ).map((x) => Session.fromJSON(x.payload));
