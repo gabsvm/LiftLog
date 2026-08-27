@@ -332,7 +332,6 @@ export function applyFeedEffects(addEffect: AddEffectFn) {
       action,
       { dispatch, stateAfterReduce, extra: { feedIdentityService } },
     ) => {
-      cancelActiveListeners;
       const identityRemote = selectFeedIdentityRemote(stateAfterReduce);
       const result = await identityRemote
         .map((i) => feedIdentityService.deleteFeedIdentityAsync(i))
