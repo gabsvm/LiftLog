@@ -3,7 +3,7 @@ import {
   SessionTarget,
   setCurrentSession,
 } from '@/store/current-session';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useStore } from 'react-redux';
 import { useTranslate } from '@tolgee/react';
 import { useEffect, useState } from 'react';
 import {
@@ -27,7 +27,10 @@ export default function SessionMoreMenuComponent(props: {
   const { t } = useTranslate();
   const { save } = props;
   const useImperialUnits = useAppSelector((x) => x.settings.useImperialUnits);
-  const session = useAppSelectorWithArg(selectCurrentSession, props.target);
+  const hasSession = useAppSelector(
+    (state) => !!selectCurrentSession(state, props.target),
+  );
+  const { getState } = useStore();
   const dispatch = useDispatch();
 
   const isReadonly = props.target === 'feedSession';
@@ -39,9 +42,10 @@ export default function SessionMoreMenuComponent(props: {
 
   const handleAddExercise = () => {
     if (editingExerciseBlueprint !== undefined) {
+      const latestSession = selectCurrentSession(getState(), props.target);
       dispatch(
         setCurrentSession({
-          session: session?.withAddedExercise(
+          session: latestSession?.withAddedExercise(
             editingExerciseBlueprint,
             useImperialUnits,
           ),
@@ -52,7 +56,7 @@ export default function SessionMoreMenuComponent(props: {
     setExerciseEditorOpen(false);
   };
 
-  if (!session || isReadonly) {
+  if (!hasSession || isReadonly) {
     return <></>;
   }
 
@@ -84,28 +88,32 @@ export default function SessionMoreMenuComponent(props: {
           />
         ),
       })}
-      <FullScreenDialog
-        title={t('exercise.add.title')}
-        action={t('generic.add.button')}
-        open={exerciseEditorOpen}
-        onAction={handleAddExercise}
-        avoidKeyboard
-        onClose={() => setExerciseEditorOpen(false)}
-      >
-        {editingExerciseBlueprint ? (
-          <ExerciseEditor
-            exercise={editingExerciseBlueprint}
-            updateExercise={(ex) => {
-              setEditingExerciseBlueprint(ex);
-            }}
-          />
-        ) : null}
-      </FullScreenDialog>
-      <WorkoutEditor
-        open={workoutEditorOpen}
-        setOpen={setWorkoutEditorOpen}
-        target={props.target}
-      />
+      {exerciseEditorOpen ? (
+        <FullScreenDialog
+          title={t('exercise.add.title')}
+          action={t('generic.add.button')}
+          open
+          onAction={handleAddExercise}
+          avoidKeyboard
+          onClose={() => setExerciseEditorOpen(false)}
+        >
+          {editingExerciseBlueprint ? (
+            <ExerciseEditor
+              exercise={editingExerciseBlueprint}
+              updateExercise={(ex) => {
+                setEditingExerciseBlueprint(ex);
+              }}
+            />
+          ) : null}
+        </FullScreenDialog>
+      ) : null}
+      {workoutEditorOpen ? (
+        <WorkoutEditor
+          open
+          setOpen={setWorkoutEditorOpen}
+          target={props.target}
+        />
+      ) : null}
     </>
   );
 }
@@ -175,11 +183,12 @@ function AndroidMenu(props: {
     setExerciseEditorOpen,
     setWorkoutEditorOpen,
   } = props;
-  const session = useAppSelectorWithArg(selectCurrentSession, target);
+  const isComplete = useAppSelector(
+    (state) => selectCurrentSession(state, target)?.isComplete ?? false,
+  );
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [jiggleFinishButton, setJiggleFinishButton] = useState(false);
-  const isComplete = session?.isComplete;
 
   useEffect(() => {
     const shouldJiggle = isComplete === true;
@@ -244,7 +253,7 @@ function WorkoutEditor(props: {
   const workout = useAppSelectorWithArg(selectCurrentSession, props.target);
   const dispatch = useDispatch();
   const [editorWorkout, setEditorWorkout] = useState(workout);
-  // When the store updates we need to replace our one
+  // While the editor is actually open, keep it aligned with the latest workout.
   useEffect(() => {
     setEditorWorkout(workout);
   }, [workout]);
