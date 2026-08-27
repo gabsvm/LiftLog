@@ -1,13 +1,13 @@
 /* eslint-disable no-restricted-imports -- set logging intentionally bypasses the RNGH wrapper to keep the hot-path press native */
 import { PotentialSet, WeightAppliesTo } from '@/models/session-models';
 import BigNumber from 'bignumber.js';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Text as PaperText,
   Chip,
   TouchableRipple as PaperTouchableRipple,
 } from 'react-native-paper';
-import { Keyboard, Text, View, type ViewStyle } from 'react-native';
+import { Text, View, type ViewStyle } from 'react-native';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
 import WeightDialog from '@/components/presentation/foundation/editors/weight-dialog';
 import { useAppTheme, spacing, font, rounding } from '@/hooks/useAppTheme';
@@ -36,12 +36,6 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
   const [isRepsDialogOpen, setIsRepsDialogOpen] = useState(false);
   const repCountValue = props.set?.set?.repsCompleted;
   const placeholderRepCount = props.previousRepCount;
-
-  useEffect(() => {
-    if (!isRepsDialogOpen) {
-      Keyboard.dismiss();
-    }
-  }, [isRepsDialogOpen]);
   const [applyTo, setApplyTo] = useState<WeightAppliesTo>('uncompletedSets');
 
   return (
@@ -166,58 +160,62 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
             </Text>
           </PaperTouchableRipple>
         </View>
-        <WeightDialog
-          open={isWeightDialogOpen}
-          allowNegative
-          increment={props.weightIncrement}
-          weight={props.set.weight}
-          onClose={() => setIsWeightDialogOpen(false)}
-          updateWeight={(w) => props.onUpdateWeight(w, applyTo)}
-        >
-          <View style={{ gap: spacing[2] }}>
-            <PaperText variant="labelLarge">
-              <T keyName="weight.apply_to.label" />
-            </PaperText>
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: spacing[1],
-              }}
-            >
-              <Chip
-                selected={applyTo === 'thisSet'}
-                testID="repcount-apply-weight-to-this-set"
-                onPress={() => setApplyTo('thisSet')}
+        {isWeightDialogOpen ? (
+          <WeightDialog
+            open
+            allowNegative
+            increment={props.weightIncrement}
+            weight={props.set.weight}
+            onClose={() => setIsWeightDialogOpen(false)}
+            updateWeight={(w) => props.onUpdateWeight(w, applyTo)}
+          >
+            <View style={{ gap: spacing[2] }}>
+              <PaperText variant="labelLarge">
+                <T keyName="weight.apply_to.label" />
+              </PaperText>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: spacing[1],
+                }}
               >
-                <T keyName="exercise.this_set.label" />
-              </Chip>
-              <Chip
-                selected={applyTo === 'uncompletedSets'}
-                testID="repcount-apply-weight-to-uncompleted-sets"
-                onPress={() => setApplyTo('uncompletedSets')}
-              >
-                <T keyName="exercise.uncompleted_sets.label" />
-              </Chip>
-              <Chip
-                selected={applyTo === 'allSets'}
-                testID="repcount-apply-weight-to-all-sets"
-                onPress={() => setApplyTo('allSets')}
-              >
-                <T keyName="exercise.all_sets.label" />
-              </Chip>
+                <Chip
+                  selected={applyTo === 'thisSet'}
+                  testID="repcount-apply-weight-to-this-set"
+                  onPress={() => setApplyTo('thisSet')}
+                >
+                  <T keyName="exercise.this_set.label" />
+                </Chip>
+                <Chip
+                  selected={applyTo === 'uncompletedSets'}
+                  testID="repcount-apply-weight-to-uncompleted-sets"
+                  onPress={() => setApplyTo('uncompletedSets')}
+                >
+                  <T keyName="exercise.uncompleted_sets.label" />
+                </Chip>
+                <Chip
+                  selected={applyTo === 'allSets'}
+                  testID="repcount-apply-weight-to-all-sets"
+                  onPress={() => setApplyTo('allSets')}
+                >
+                  <T keyName="exercise.all_sets.label" />
+                </Chip>
+              </View>
             </View>
-          </View>
-        </WeightDialog>
+          </WeightDialog>
+        ) : null}
       </View>
 
-      <PotentialSetAdditionalActionsDialog
-        open={isRepsDialogOpen}
-        repTarget={props.maxReps}
-        set={props.set}
-        updateRepCount={(reps) => props.onUpdateReps(reps)}
-        close={() => setIsRepsDialogOpen(false)}
-      />
+      {isRepsDialogOpen ? (
+        <PotentialSetAdditionalActionsDialog
+          open
+          repTarget={props.maxReps}
+          set={props.set}
+          updateRepCount={(reps) => props.onUpdateReps(reps)}
+          close={() => setIsRepsDialogOpen(false)}
+        />
+      ) : null}
     </FocusRing>
   );
 }
