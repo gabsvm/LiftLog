@@ -45,6 +45,7 @@ export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
     >
       <Card.Content
         style={{
+          minHeight: expanded ? undefined : 40,
           flexDirection: 'row',
           alignItems: expanded ? 'flex-start' : 'center',
           gap: expanded ? spacing[2] : spacing[1],
