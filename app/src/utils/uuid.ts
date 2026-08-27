@@ -46,8 +46,8 @@ export function uuid(): string {
 
   // RFC 4122 UUID v4: set version and variant bits explicitly before using
   // uuid.stringify(), which itself does not require globalThis.crypto.
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
 
   return stringify(bytes);
 }
