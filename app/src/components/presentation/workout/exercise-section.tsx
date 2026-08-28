@@ -75,56 +75,60 @@ export default function ExerciseSection<T extends RecordedExercise>(
           />
         }
       >
-        <Menu.Item
-          onPress={() => {
-            props.onEditExercise();
-            setMenuVisible(false);
-          }}
-          testID="exercise-edit-menu-button"
-          leadingIcon={'edit'}
-          title={t('generic.edit.button')}
-        />
-        <Menu.Item
-          testID="exercise-notes-more-btn"
-          title={t('generic.notes.label')}
-          leadingIcon={'notes'}
-          onPress={() => {
-            setNotesDialogOpen(true);
-            setMenuVisible(false);
-          }}
-        />
-        {showStats ? (
-          <Menu.Item
-            onPress={() => {
-              push(
-                `/stats/expanded-weighted-exercise?exerciseName=${encodeURIComponent(recordedExercise.blueprint.name)}`,
-                { withAnchor: true },
-              );
-              setMenuVisible(false);
-            }}
-            testID="exercise-stats-menu-button"
-            leadingIcon={'analytics'}
-            title={t('stats.stats.title')}
-          />
+        {menuVisible ? (
+          <>
+            <Menu.Item
+              onPress={() => {
+                props.onEditExercise();
+                setMenuVisible(false);
+              }}
+              testID="exercise-edit-menu-button"
+              leadingIcon={'edit'}
+              title={t('generic.edit.button')}
+            />
+            <Menu.Item
+              testID="exercise-notes-more-btn"
+              title={t('generic.notes.label')}
+              leadingIcon={'notes'}
+              onPress={() => {
+                setNotesDialogOpen(true);
+                setMenuVisible(false);
+              }}
+            />
+            {showStats ? (
+              <Menu.Item
+                onPress={() => {
+                  push(
+                    `/stats/expanded-weighted-exercise?exerciseName=${encodeURIComponent(recordedExercise.blueprint.name)}`,
+                    { withAnchor: true },
+                  );
+                  setMenuVisible(false);
+                }}
+                testID="exercise-stats-menu-button"
+                leadingIcon={'analytics'}
+                title={t('stats.stats.title')}
+              />
+            ) : null}
+            <Menu.Item
+              onPress={() => {
+                setRemoveExerciseDialogOpen(true);
+                setMenuVisible(false);
+              }}
+              leadingIcon={'delete'}
+              title={t('generic.remove.button')}
+            />
+            {!!props.recordedExercise.blueprint.link && (
+              <Menu.Item
+                onPress={() => {
+                  openUrl(props.recordedExercise.blueprint.link!);
+                  setMenuVisible(false);
+                }}
+                leadingIcon={'openInBrowser'}
+                title={t('generic.open_link.button')}
+              />
+            )}
+          </>
         ) : null}
-        <Menu.Item
-          onPress={() => {
-            setRemoveExerciseDialogOpen(true);
-            setMenuVisible(false);
-          }}
-          leadingIcon={'delete'}
-          title={t('generic.remove.button')}
-        />
-        {!!props.recordedExercise.blueprint.link && (
-          <Menu.Item
-            onPress={() => {
-              openUrl(props.recordedExercise.blueprint.link);
-              setMenuVisible(false);
-            }}
-            leadingIcon={'openInBrowser'}
-            title={t('generic.open_link.button')}
-          />
-        )}
       </Menu>
     </View>
   );
