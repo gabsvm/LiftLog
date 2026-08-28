@@ -324,31 +324,35 @@ function HistorySessionActions({
           />
         }
       >
-        <Menu.Item
-          testID="history-edit-workout"
-          leadingIcon="edit"
-          title={t('workout.edit.button')}
-          onPress={() => {
-            setMenuVisible(false);
-            onEdit();
-          }}
-        />
-        <Menu.Item
-          leadingIcon="share"
-          title={t('workout.share_workout.button')}
-          onPress={() => {
-            setMenuVisible(false);
-            onShare();
-          }}
-        />
-        <Menu.Item
-          leadingIcon="delete"
-          title={t('generic.delete.button')}
-          onPress={() => {
-            setMenuVisible(false);
-            onDelete();
-          }}
-        />
+        {menuVisible ? (
+          <>
+            <Menu.Item
+              testID="history-edit-workout"
+              leadingIcon="edit"
+              title={t('workout.edit.button')}
+              onPress={() => {
+                setMenuVisible(false);
+                onEdit();
+              }}
+            />
+            <Menu.Item
+              leadingIcon="share"
+              title={t('workout.share_workout.button')}
+              onPress={() => {
+                setMenuVisible(false);
+                onShare();
+              }}
+            />
+            <Menu.Item
+              leadingIcon="delete"
+              title={t('generic.delete.button')}
+              onPress={() => {
+                setMenuVisible(false);
+                onDelete();
+              }}
+            />
+          </>
+        ) : null}
       </Menu>
     </CardActions>
   );
