@@ -331,10 +331,15 @@ export const selectRecentlyCompletedExercises = createSelector(
     (_, maxRecordsPerExercise: number) => maxRecordsPerExercise,
   ],
   (recentExercises, maxRecordsPerExercise) =>
-    (blueprint: ExerciseBlueprint): RecordedExercise[] =>
-      (recentExercises[
-        NormalizedName.fromExerciseBlueprint(blueprint).toString()
-      ] ?? []).slice(0, maxRecordsPerExercise),
+    (blueprint: ExerciseBlueprint): RecordedExercise[] => {
+      const recent =
+        recentExercises[
+          NormalizedName.fromExerciseBlueprint(blueprint).toString()
+        ] ?? [];
+      return recent.length <= maxRecordsPerExercise
+        ? recent
+        : recent.slice(0, maxRecordsPerExercise);
+    },
 );
 
 export const selectPreviousComparableSession = createSelector(
