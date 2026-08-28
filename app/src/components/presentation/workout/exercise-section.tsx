@@ -120,7 +120,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
             {!!props.recordedExercise.blueprint.link && (
               <Menu.Item
                 onPress={() => {
-                  openUrl(props.recordedExercise.blueprint.link!);
+                  openUrl(props.recordedExercise.blueprint.link);
                   setMenuVisible(false);
                 }}
                 leadingIcon={'openInBrowser'}
