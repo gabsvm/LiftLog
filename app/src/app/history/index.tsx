@@ -13,7 +13,7 @@ import LimitedHtml from '@/components/presentation/foundation/limited-html';
 import SessionSummaryTitle from '@/components/presentation/summary/session-summary-title';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Session } from '@/models/session-models';
-import { useAppSelector, useAppSelectorWithArg } from '@/store';
+import { useAppSelector } from '@/store';
 import {
   selectCurrentSession,
   setCurrentSession,
@@ -55,9 +55,8 @@ export default function History() {
       .unwrapOr(undefined),
   );
   const { push } = useRouter();
-  const currentWorkoutSession = useAppSelectorWithArg(
-    selectCurrentSession,
-    'workoutSession',
+  const hasCurrentWorkoutSession = useAppSelector(
+    (state) => !!selectCurrentSession(state, 'workoutSession'),
   );
 
   const sessionsInMonth = useMemo(
@@ -113,7 +112,7 @@ export default function History() {
   };
 
   const startWorkout = (session: Session, force = false) => {
-    if (currentWorkoutSession && !force) {
+    if (hasCurrentWorkoutSession && !force) {
       setSelectedWorkout(session);
       setReplaceCurrentSessionConfirmOpen(true);
     } else {
