@@ -2,7 +2,7 @@
   "expo": {
     "name": "GainsLab",
     "slug": "gainslab",
-    "version": "1.1.7",
+    "version": "1.1.8",
     "userInterfaceStyle": "dark",
     "web": {
       "bundler": "metro",
@@ -64,8 +64,8 @@
     },
     "scheme": "gainslab",
     "android": {
-      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 10",
-      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.1.7\"}",
+      "versionCode": "project.hasProperty('BUILD_NUMBER') ? project.property('BUILD_NUMBER').toInteger() : 11",
+      "version": "${project.hasProperty('DISPLAY_VERSION') ? project.property('DISPLAY_VERSION') : \"1.1.8\"}",
       "package": "com.gabsvm.gainslab",
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
