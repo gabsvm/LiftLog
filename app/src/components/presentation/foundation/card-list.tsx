@@ -45,31 +45,22 @@ export default function CardList<T>(props: CardListProps<T>) {
       ]}
     >
       {!items.length ? emptyTemplate : null}
-      {items.map((item, i) => {
-        const title = renderItemTitle && {
-          ...renderItemTitle(item, i),
-          key: 'title',
-        };
-        const content = { ...renderItemContent(item, i), key: 'content' };
-        const actions = renderItemActions && {
-          ...renderItemActions(item, i),
-          key: 'actions',
-        };
-        return (
-          <Card
-            key={keySelector?.(item) ?? i}
-            style={[
-              cardStyle,
-              shouldHighlight?.(item, i) ? highlightStyle : undefined,
-            ]}
-            mode={cardType}
-            onLongPress={onLongPress ? () => onLongPress(item, i) : undefined}
-            onPress={onPress ? () => onPress(item, i) : undefined}
-          >
-            {[title, content, actions].filter(Boolean)}
-          </Card>
-        );
-      })}
+      {items.map((item, i) => (
+        <Card
+          key={keySelector?.(item) ?? i}
+          style={[
+            cardStyle,
+            shouldHighlight?.(item, i) ? highlightStyle : undefined,
+          ]}
+          mode={cardType}
+          onLongPress={onLongPress ? () => onLongPress(item, i) : undefined}
+          onPress={onPress ? () => onPress(item, i) : undefined}
+        >
+          {renderItemTitle?.(item, i)}
+          {renderItemContent(item, i)}
+          {renderItemActions?.(item, i)}
+        </Card>
+      ))}
     </View>
   );
 }
