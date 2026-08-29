@@ -1,9 +1,13 @@
 import CardActions from '@/components/presentation/foundation/card-actions';
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
-import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
+import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
+import {
+  gainsLabRadii,
+  gainsLabTouchTarget,
+} from '@/components/presentation/foundation/gainslab-ui';
 import { Loader } from '@/components/presentation/foundation/loader';
 import {
   ScreenHeading,
@@ -29,7 +33,7 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { Card, Menu, Text } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { useDispatch } from 'react-redux';
 import { MigrateToWeightUnitsWizard } from '@/components/smart/migrate-to-weight-units';
@@ -46,23 +50,32 @@ function PlanSummary() {
   const plan = useAppSelector(selectActiveProgram);
 
   return (
-    <Card
-      mode="contained"
-      onPress={() => push('/settings/program-list', { withAnchor: true })}
-      style={[styles.planSummary, { backgroundColor: colors.surfaceContainer }]}
-    >
-      <Card.Content style={styles.planSummaryContent}>
-        <View style={{ flex: 1 }}>
-          <Text variant="labelMedium" style={{ color: colors.onSurfaceVariant }}>
-            {t('home.plan.section')}
-          </Text>
-          <Text variant="titleMedium" numberOfLines={1} style={styles.strong}>
-            {plan.name}
-          </Text>
-        </View>
-        <Icon source="chevronRight" size={26} color={colors.primary} />
-      </Card.Content>
-    </Card>
+    <View style={styles.planBlock}>
+      <SectionHeading title={t('home.plan.section')} />
+      <Card
+        mode="contained"
+        onPress={() => push('/settings/program-list', { withAnchor: true })}
+        style={[
+          styles.planSummary,
+          { backgroundColor: colors.surfaceContainerLow },
+        ]}
+      >
+        <Card.Content style={styles.planSummaryContent}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="titleMedium" numberOfLines={1} style={styles.strong}>
+              {plan.name}
+            </Text>
+            <Text
+              variant="bodySmall"
+              style={{ color: colors.onSurfaceVariant, marginTop: spacing[0.5] }}
+            >
+              {t('plan.manage.subtitle')}
+            </Text>
+          </View>
+          <Icon source="chevronRight" size={22} color={colors.onSurfaceVariant} />
+        </Card.Content>
+      </Card>
+    </View>
   );
 }
 
@@ -97,56 +110,46 @@ function ListUpcomingWorkouts({
       <WelcomeWizard />
       <GainsLabWordmark compact />
       <ScreenHeading title={t('home.title')} subtitle={t('home.subtitle')} />
-      <PlanSummary />
 
-      {currentSession && (
+      {currentSession ? (
+        <ActiveWorkoutCard
+          session={currentSession}
+          actionLabel={t('workout.resume.button')}
+          testID="resume-workout-button"
+          onAction={() => selectSession(currentSession)}
+          onDelete={() => setConfirmDeleteSessionOpen(true)}
+        />
+      ) : null}
+
+      {!!upcoming.length ? (
         <>
           <SectionHeading
-            title={t('workout.current.title')}
-            detail={currentSession.blueprint.name}
+            title={t('home.up_next')}
+            detail={t('home.up_next_hint')}
           />
-          <WorkoutCard
-            session={currentSession}
-            actionLabel={t('workout.resume.button')}
-            testID="resume-workout-button"
-            highlighted
-            onAction={() => selectSession(currentSession)}
-            onDelete={() => setConfirmDeleteSessionOpen(true)}
-          />
+          <View style={styles.workoutList}>
+            {upcoming.map((session) => (
+              <UpcomingWorkoutCard
+                key={session.id}
+                session={session}
+                onAction={() => selectSession(session)}
+              />
+            ))}
+          </View>
         </>
-      )}
-
-      {!!upcoming.length && (
-        <SectionHeading
-          title={t('home.up_next')}
-          detail={t('home.up_next_hint')}
-        />
-      )}
-      <View style={styles.workoutList}>
-        {upcoming.map((session) => (
-          <WorkoutCard
-            key={session.id}
-            session={session}
-            actionLabel={
-              session.isStarted
-                ? t('workout.resume.button')
-                : t('workout.start.button')
-            }
-            testID="start-resume-workout-button"
-            onAction={() => selectSession(session)}
-          />
-        ))}
-      </View>
+      ) : null}
 
       <Button
         mode="outlined"
         icon="fitnessCenter"
         style={styles.freeformButton}
-        contentStyle={{ minHeight: 48 }}
+        contentStyle={{ minHeight: gainsLabTouchTarget.minimum }}
         onPress={createFreeformSession}
       >
         {t('workout.freeform.title')}
       </Button>
+
+      <PlanSummary />
 
       {confirmDeleteSessionOpen ? (
         <ConfirmationDialog
@@ -165,42 +168,175 @@ function ListUpcomingWorkouts({
   );
 }
 
-function WorkoutCard({
+function ActiveWorkoutCard({
   session,
   actionLabel,
   testID,
   onAction,
   onDelete,
-  highlighted = false,
 }: {
   session: Session;
   actionLabel: string;
   testID: string;
   onAction: () => void;
-  onDelete?: () => void;
-  highlighted?: boolean;
+  onDelete: () => void;
 }) {
   const { colors } = useAppTheme();
   const { t } = useTranslate();
-  const visibleExercises = session.recordedExercises.slice(0, 4);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const { completedSets, totalSets } = getSessionSetProgress(session);
+  const progress = totalSets === 0 ? 0 : completedSets / totalSets;
+  const visibleExercises = session.recordedExercises.slice(0, 3);
   const hiddenCount = session.recordedExercises.length - visibleExercises.length;
+
+  const handleResume = () => {
+    void impactAsync(ImpactFeedbackStyle.Light);
+    onAction();
+  };
 
   return (
     <Card
       mode="contained"
       style={[
-        styles.workoutCard,
+        styles.activeWorkoutCard,
         {
-          backgroundColor: highlighted
-            ? colors.surfaceContainerHigh
-            : colors.surfaceContainer,
+          backgroundColor: colors.surfaceContainerHigh,
+          borderColor: colors.primary,
         },
       ]}
     >
       <Card.Content>
+        <View style={styles.activeCardTopRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.microLabel, { color: colors.primary }]}> 
+              {t('workout.current.title')}
+            </Text>
+            <Text
+              variant="headlineSmall"
+              numberOfLines={2}
+              style={[styles.strong, styles.activeWorkoutTitle]}
+            >
+              {session.blueprint.name}
+            </Text>
+          </View>
+          <Menu
+            visible={menuVisible}
+            onDismiss={() => setMenuVisible(false)}
+            anchor={
+              <IconButton
+                icon="moreHoriz"
+                accessibilityLabel={`${t('navigation.more')}: ${session.blueprint.name}`}
+                onPress={() => setMenuVisible(true)}
+              />
+            }
+          >
+            {menuVisible ? (
+              <Menu.Item
+                leadingIcon="delete"
+                title={t('generic.clear.button')}
+                onPress={() => {
+                  setMenuVisible(false);
+                  onDelete();
+                }}
+              />
+            ) : null}
+          </Menu>
+        </View>
+
+        <View style={styles.activeProgressHeader}>
+          <Text
+            variant="labelMedium"
+            style={{ color: colors.onSurfaceVariant, fontVariant: ['tabular-nums'] }}
+          >
+            {completedSets}/{totalSets}
+          </Text>
+          <Text
+            variant="labelMedium"
+            style={{ color: colors.primary, fontWeight: '800' }}
+          >
+            {t('generic.active.label')}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.progressTrack,
+            { backgroundColor: colors.outlineVariant },
+          ]}
+        >
+          <View
+            style={[
+              styles.progressFill,
+              { backgroundColor: colors.primary, width: `${progress * 100}%` },
+            ]}
+          />
+        </View>
+
+        <View style={styles.activeExercisePreview}>
+          {visibleExercises.map((exercise, index) => (
+            <ExercisePreviewRow
+              key={`${exercise.blueprint.name}-${index}`}
+              index={index}
+              name={exercise.blueprint.name}
+            />
+          ))}
+          {hiddenCount > 0 ? (
+            <Text
+              variant="labelMedium"
+              style={{ color: colors.onSurfaceVariant }}
+            >
+              {t('home.more_exercises', { count: hiddenCount })}
+            </Text>
+          ) : null}
+        </View>
+      </Card.Content>
+
+      <CardActions style={styles.activeWorkoutActions}>
+        <Button
+          mode="contained"
+          icon="playArrow"
+          testID={testID}
+          contentStyle={{ minHeight: gainsLabTouchTarget.primaryAction }}
+          style={{ flex: 1 }}
+          onPress={handleResume}
+        >
+          {actionLabel}
+        </Button>
+      </CardActions>
+    </Card>
+  );
+}
+
+function UpcomingWorkoutCard({
+  session,
+  onAction,
+}: {
+  session: Session;
+  onAction: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const { t } = useTranslate();
+  const visibleExercises = session.recordedExercises.slice(0, 3);
+  const hiddenCount = session.recordedExercises.length - visibleExercises.length;
+
+  const handlePress = () => {
+    void impactAsync(ImpactFeedbackStyle.Light);
+    onAction();
+  };
+
+  return (
+    <Card
+      mode="contained"
+      onPress={handlePress}
+      accessibilityLabel={session.blueprint.name}
+      style={[
+        styles.upcomingWorkoutCard,
+        { backgroundColor: colors.surfaceContainer },
+      ]}
+    >
+      <Card.Content>
         <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text variant="headlineSmall" style={styles.strong}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="titleLarge" numberOfLines={2} style={styles.strong}>
               {session.blueprint.name}
             </Text>
             <Text
@@ -212,87 +348,67 @@ function WorkoutCard({
               })}
             </Text>
           </View>
-          {session.isStarted ? (
-            <View
-              style={[
-                styles.statusPill,
-                { backgroundColor: colors.primaryContainer },
-              ]}
-            >
-              <View
-                style={[styles.statusDot, { backgroundColor: colors.primary }]}
-              />
-              <Text
-                variant="labelMedium"
-                style={{ color: colors.onPrimaryContainer, fontWeight: '700' }}
-              >
-                {t('generic.active.label')}
-              </Text>
-            </View>
-          ) : null}
+          <Icon source="chevronRight" size={22} color={colors.onSurfaceVariant} />
         </View>
 
         <View style={styles.exercisePreview}>
           {visibleExercises.map((exercise, index) => (
-            <View
+            <ExercisePreviewRow
               key={`${exercise.blueprint.name}-${index}`}
-              style={styles.exerciseRow}
-            >
-              <Text
-                variant="labelMedium"
-                style={[styles.exerciseNumber, { color: colors.primary }]}
-              >
-                {(index + 1).toString().padStart(2, '0')}
-              </Text>
-              <Text variant="bodyMedium" numberOfLines={1} style={{ flex: 1 }}>
-                {exercise.blueprint.name}
-              </Text>
-              {exercise.type === 'RecordedWeightedExercise' ? (
-                <Text
-                  variant="labelMedium"
-                  style={{ color: colors.onSurfaceVariant }}
-                >
-                  {exercise.potentialSets.length} × {exercise.blueprint.repsPerSet}
-                </Text>
-              ) : null}
-            </View>
+              index={index}
+              name={exercise.blueprint.name}
+            />
           ))}
           {hiddenCount > 0 ? (
             <Text
               variant="labelMedium"
-              style={{ color: colors.onSurfaceVariant, marginTop: spacing[1] }}
+              style={{ color: colors.onSurfaceVariant }}
             >
               {t('home.more_exercises', { count: hiddenCount })}
             </Text>
           ) : null}
         </View>
       </Card.Content>
-
-      <CardActions style={styles.workoutActions}>
-        {onDelete ? (
-          <IconButton
-            testID="clear-current-workout"
-            icon="delete"
-            accessibilityLabel={t('workout.clear_current.confirm.title')}
-            onPress={onDelete}
-          />
-        ) : null}
-        <Button
-          mode="contained"
-          icon="playArrow"
-          testID={testID}
-          contentStyle={{ minHeight: 48 }}
-          style={{ flex: 1 }}
-          onPress={() => {
-            void impactAsync(ImpactFeedbackStyle.Light);
-            onAction();
-          }}
-        >
-          {actionLabel}
-        </Button>
-      </CardActions>
     </Card>
   );
+}
+
+function ExercisePreviewRow({ index, name }: { index: number; name: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={styles.exerciseRow}>
+      <Text
+        variant="labelMedium"
+        style={[styles.exerciseNumber, { color: colors.primary }]}
+      >
+        {(index + 1).toString().padStart(2, '0')}
+      </Text>
+      <Text variant="bodyMedium" numberOfLines={1} style={{ flex: 1 }}>
+        {name}
+      </Text>
+    </View>
+  );
+}
+
+function getSessionSetProgress(session: Session) {
+  let completedSets = 0;
+  let totalSets = 0;
+
+  for (const exercise of session.recordedExercises) {
+    if (exercise.type === 'RecordedWeightedExercise') {
+      totalSets += exercise.potentialSets.length;
+      for (const set of exercise.potentialSets) {
+        if (set.set) completedSets += 1;
+      }
+    } else {
+      totalSets += exercise.sets.length;
+      for (const set of exercise.sets) {
+        if (set.isCompletelyFilled) completedSets += 1;
+      }
+    }
+  }
+
+  return { completedSets, totalSets };
 }
 
 function HomeLoadingState() {
@@ -328,8 +444,6 @@ export default function Index() {
 
   useFocusEffect(
     useCallback(() => {
-      // Refresh the UI-critical data immediately. Network backup/publishing can
-      // wait until after the tab transition and first paint.
       dispatch(fetchUpcomingSessions());
       const maintenanceTimer = setTimeout(() => {
         dispatch(publishUnpublishedSessions());
@@ -389,44 +503,66 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.35,
   },
-  planSummary: {
-    borderRadius: 18,
-    marginBottom: spacing[1],
+  microLabel: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
   },
-  planSummaryContent: {
-    minHeight: 68,
+  activeWorkoutCard: {
+    borderRadius: gainsLabRadii.hero,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  activeCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[2],
+  },
+  activeWorkoutTitle: {
+    marginTop: spacing[1],
+  },
+  activeProgressHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[3],
+    justifyContent: 'space-between',
+    marginTop: spacing[4],
+  },
+  progressTrack: {
+    height: 4,
+    overflow: 'hidden',
+    borderRadius: gainsLabRadii.pill,
+    marginTop: spacing[2],
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: gainsLabRadii.pill,
+  },
+  activeExercisePreview: {
+    gap: spacing[2],
+    marginTop: spacing[4],
+  },
+  activeWorkoutActions: {
+    paddingHorizontal: spacing[3],
+    paddingBottom: spacing[3],
+    paddingTop: spacing[1],
   },
   workoutList: {
     gap: spacing[3],
   },
-  workoutCard: {
-    borderRadius: 22,
+  upcomingWorkoutCard: {
+    borderRadius: gainsLabRadii.card,
     overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing[3],
-  },
-  statusPill: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    borderRadius: 999,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1],
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
+    gap: spacing[3],
   },
   exercisePreview: {
     gap: spacing[2],
-    marginTop: spacing[4],
+    marginTop: spacing[3],
   },
   exerciseRow: {
     flexDirection: 'row',
@@ -439,18 +575,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  workoutActions: {
-    gap: spacing[1],
-    paddingHorizontal: spacing[3],
-    paddingBottom: spacing[3],
-  },
   freeformButton: {
     marginTop: spacing[1],
+  },
+  planBlock: {
+    gap: spacing[2],
     marginBottom: spacing[3],
+  },
+  planSummary: {
+    borderRadius: gainsLabRadii.card,
+  },
+  planSummaryContent: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
   },
   loadingCard: {
     minHeight: 180,
-    borderRadius: 22,
+    borderRadius: gainsLabRadii.hero,
   },
   loadingCardContent: {
     minHeight: 180,
