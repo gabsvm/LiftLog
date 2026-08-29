@@ -1,11 +1,11 @@
 import { SurfaceText } from '@/components/presentation/foundation/surface-text';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Session } from '@/models/session-models';
 import { useAppSelector } from '@/store';
 import { getDateOnDay } from '@/utils/format-date';
 import { DayOfWeek, LocalDate, Year, YearMonth } from '@js-joda/core';
 import { I18nManager, View } from 'react-native';
-import { Card } from 'react-native-paper';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import TouchableRipple from '@/components/presentation/foundation/gesture-wrappers/touchable-ripple';
 import { ReactNode, useMemo } from 'react';
@@ -17,7 +17,6 @@ interface HistoryCalendarCardProps {
   onMonthChange: (date: YearMonth) => void;
   onDateSelect: (date: LocalDate) => void;
   onSessionSelect: (Session: Session) => void;
-  onDeleteSession: (session: Session) => void;
 }
 
 type CalendarDayModel = {
@@ -31,7 +30,6 @@ export default function HistoryCalendarCard({
   onMonthChange,
   onDateSelect,
   onSessionSelect,
-  onDeleteSession,
 }: HistoryCalendarCardProps) {
   const firstDayOfMonth = useMemo(
     () => currentYearMonth.atDay(1),
@@ -111,13 +109,6 @@ export default function HistoryCalendarCard({
     }
   };
 
-  const handleDayLongPress = (date: LocalDate) => {
-    const session = sessionsByDate.get(date.toString())?.[0];
-    if (session) {
-      onDeleteSession(session);
-    }
-  };
-
   const monthLabel = formatDate(firstDayOfMonth, {
     month: 'long',
     year:
@@ -133,70 +124,74 @@ export default function HistoryCalendarCard({
   });
 
   return (
-    <Card mode="contained">
-      <Card.Content>
-        <View
-          style={{ justifyContent: 'center', alignItems: 'stretch', flex: 3 }}
-        >
-          <ForceLTRRow>
-            <View style={{ flex: 1 }}>
-              <IconButton
-                testID="calendar-nav-previous-month"
-                icon="chevronLeft"
-                accessibilityLabel={previousMonthLabel}
-                onPress={previousMonth}
-              />
-            </View>
-            <View
-              style={{
-                flex: 5,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
+    <View style={{ paddingVertical: spacing[1] }}>
+      <View style={{ justifyContent: 'center', alignItems: 'stretch' }}>
+        <ForceLTRRow>
+          <View style={{ flex: 1 }}>
+            <IconButton
+              testID="calendar-nav-previous-month"
+              icon="chevronLeft"
+              accessibilityLabel={previousMonthLabel}
+              onPress={previousMonth}
+            />
+          </View>
+          <View
+            style={{
+              flex: 5,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <SurfaceText
+              testID="calendar-month"
+              font="text-lg"
+              weight="bold"
             >
-              <SurfaceText testID="calendar-month">{monthLabel}</SurfaceText>
-            </View>
-            <View style={{ flex: 1 }}>
-              <IconButton
-                testID="calendar-nav-next-month"
-                icon="chevronRight"
-                accessibilityLabel={nextMonthLabel}
-                onPress={nextMonth}
-                disabled={disableNextMonth}
-              />
-            </View>
-          </ForceLTRRow>
+              {monthLabel}
+            </SurfaceText>
+          </View>
+          <View style={{ flex: 1 }}>
+            <IconButton
+              testID="calendar-nav-next-month"
+              icon="chevronRight"
+              accessibilityLabel={nextMonthLabel}
+              onPress={nextMonth}
+              disabled={disableNextMonth}
+            />
+          </View>
+        </ForceLTRRow>
 
-          <ForceLTRRow>
-            {dayHeaderLabels.map(({ dayOfWeek, label }) => (
-              <View style={{ flex: 1 }} key={dayOfWeek}>
-                <SurfaceText
-                  style={{ marginBottom: spacing[2], textAlign: 'center' }}
-                >
-                  {label}
-                </SurfaceText>
-              </View>
+        <ForceLTRRow>
+          {dayHeaderLabels.map(({ dayOfWeek, label }) => (
+            <View style={{ flex: 1 }} key={dayOfWeek}>
+              <SurfaceText
+                color="onSurfaceVariant"
+                font="text-xs"
+                weight="bold"
+                style={{ marginBottom: spacing[2], textAlign: 'center' }}
+              >
+                {label}
+              </SurfaceText>
+            </View>
+          ))}
+        </ForceLTRRow>
+
+        {calendarWeeks.map((week) => (
+          <ForceLTRRow key={week[0]?.date.toString() ?? 'week'}>
+            {week.map(({ date, label }) => (
+              <HistoryCalendarDay
+                key={date.toString()}
+                sessions={sessionsByDate.get(date.toString()) ?? []}
+                day={date}
+                label={label}
+                today={today}
+                onPress={() => handleDayPress(date)}
+              />
             ))}
           </ForceLTRRow>
-
-          {calendarWeeks.map((week) => (
-            <ForceLTRRow key={week[0]?.date.toString() ?? 'week'}>
-              {week.map(({ date, label }) => (
-                <HistoryCalendarDay
-                  key={date.toString()}
-                  sessions={sessionsByDate.get(date.toString()) ?? []}
-                  day={date}
-                  label={label}
-                  today={today}
-                  onPress={() => handleDayPress(date)}
-                  onLongPress={() => handleDayLongPress(date)}
-                />
-              ))}
-            </ForceLTRRow>
-          ))}
-        </View>
-      </Card.Content>
-    </Card>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -206,44 +201,47 @@ function HistoryCalendarDay(props: {
   today: LocalDate;
   sessions: Session[];
   onPress: () => void;
-  onLongPress: () => void;
 }) {
   const isFuture = props.day.isAfter(props.today);
   const hasSessions = props.sessions.length > 0;
-  const isTodayWithNoSessions = props.day.equals(props.today) && !hasSessions;
+  const isToday = props.day.equals(props.today);
   const { colors } = useAppTheme();
 
   return (
     <View
       style={{
         flex: 1,
-        borderRadius: 1000,
+        borderRadius: gainsLabRadii.pill,
         overflow: 'hidden',
         alignItems: 'center',
       }}
     >
       <TouchableRipple
         onPress={props.onPress}
-        onLongPress={props.onLongPress}
         disabled={isFuture}
         accessibilityLabel={props.day.toString()}
-        style={{ padding: spacing[1], borderRadius: 1000, overflow: 'hidden' }}
+        style={{
+          padding: spacing[1],
+          borderRadius: gainsLabRadii.pill,
+          overflow: 'hidden',
+        }}
       >
         <View
           style={{
             alignItems: 'center',
             justifyContent: 'center',
-            aspectRatio: '1/1',
             width: spacing[10],
-            borderRadius: 1000,
-            borderColor: isTodayWithNoSessions ? colors.primary : 'transparent',
-            borderWidth: 1,
+            height: spacing[10],
+            borderRadius: gainsLabRadii.pill,
+            borderColor: isToday ? colors.primary : 'transparent',
+            borderWidth: isToday ? 1 : 0,
             backgroundColor: hasSessions ? colors.primary : 'transparent',
           }}
         >
           <SurfaceText
-            style={{ textAlign: 'center' }}
-            color={hasSessions ? 'onPrimary' : 'onSurface'}
+            style={{ textAlign: 'center', fontVariant: ['tabular-nums'] }}
+            weight={hasSessions || isToday ? 'bold' : 'normal'}
+            color={hasSessions ? 'onPrimary' : isFuture ? 'outline' : 'onSurface'}
           >
             {props.label}
           </SurfaceText>
