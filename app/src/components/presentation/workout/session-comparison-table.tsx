@@ -7,6 +7,7 @@ import { formatDuration } from '@/utils/format-date';
 import { localeFormatBigNumber } from '@/utils/locale-bignumber';
 import { T, useTranslate } from '@tolgee/react';
 import BigNumber from 'bignumber.js';
+import { useMemo } from 'react';
 import { View } from 'react-native';
 import { Text } from 'react-native-paper';
 
@@ -19,24 +20,48 @@ interface SessionComparisonTableProps {
 export function SessionComparisonTable(props: SessionComparisonTableProps) {
   const { colors } = useAppTheme();
   const { t } = useTranslate();
-  const weightedExerciseComparisons = getWeightedExerciseComparisons(
-    props.session,
-    props.previousSession,
+  const currentDuration = useMemo(() => props.session.duration, [props.session]);
+  const previousDuration = useMemo(
+    () => props.previousSession?.duration,
+    [props.previousSession],
+  );
+  const currentTotalWeightLifted = useMemo(
+    () => props.session.totalWeightLifted,
+    [props.session],
+  );
+  const previousTotalWeightLifted = useMemo(
+    () => props.previousSession?.totalWeightLifted,
+    [props.previousSession],
+  );
+  const weightedExerciseComparisons = useMemo(
+    () =>
+      props.mode === 'full'
+        ? getWeightedExerciseComparisons(props.session, props.previousSession)
+        : [],
+    [props.mode, props.previousSession, props.session],
   );
   const showCurrentTotalTime =
-    !!props.session.duration &&
-    (props.mode === 'compact' || props.session.duration.toMinutes() >= 5);
+    !!currentDuration &&
+    (props.mode === 'compact' || currentDuration.toMinutes() >= 5);
   const showPreviousTotalTime =
-    !!props.previousSession?.duration &&
-    (props.mode === 'compact' ||
-      props.previousSession.duration.toMinutes() >= 5);
+    !!previousDuration &&
+    (props.mode === 'compact' || previousDuration.toMinutes() >= 5);
+  const currentDurationText =
+    showCurrentTotalTime && currentDuration
+      ? formatDuration(currentDuration, 'hours-mins')
+      : '-';
+  const previousDurationText =
+    showPreviousTotalTime && previousDuration
+      ? formatDuration(previousDuration, 'hours-mins')
+      : '-';
   const totalLiftedBadge = (
     <ComparisonBadge
-      current={props.session.totalWeightLifted}
-      previous={props.previousSession?.totalWeightLifted}
+      current={currentTotalWeightLifted}
+      previous={previousTotalWeightLifted}
     />
   );
-  const content = (
+
+  return (
     <View>
       {props.mode === 'compact' ? (
         <Text
@@ -68,10 +93,10 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
             }}
           />
           <Text
-            variant="bodyMedium"
+            variant="labelSmall"
             style={{
               flex: 0.56,
-              paddingHorizontal: spacing[2],
+              paddingHorizontal: spacing[1],
               paddingVertical: spacing[2],
               textAlign: 'right',
               color: colors.onSurfaceVariant,
@@ -80,10 +105,10 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
             {t('generic.previous.button')}
           </Text>
           <Text
-            variant="bodyMedium"
+            variant="labelSmall"
             style={{
               flex: 0.56,
-              paddingHorizontal: spacing[2],
+              paddingHorizontal: spacing[1],
               paddingVertical: spacing[2],
               textAlign: 'right',
               color: colors.onSurfaceVariant,
@@ -94,7 +119,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
           <View
             style={{
               flex: 0.34,
-              paddingHorizontal: spacing[2],
+              paddingHorizontal: spacing[1],
               paddingVertical: spacing[2],
             }}
           />
@@ -124,17 +149,14 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
               variant="bodyMedium"
               style={{
                 flex: 0.56,
-                paddingHorizontal: spacing[2],
+                paddingHorizontal: spacing[1],
                 paddingVertical: spacing[2],
                 textAlign: 'right',
                 color: colors.primary,
                 fontWeight: 'normal',
               }}
             >
-              {(showPreviousTotalTime &&
-                props.previousSession?.duration &&
-                formatDuration(props.previousSession.duration, 'hours-mins')) ||
-                '-'}
+              {previousDurationText}
             </Text>
           ) : null}
           {props.mode === 'full' ? (
@@ -142,17 +164,14 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
               variant="bodyMedium"
               style={{
                 flex: 0.56,
-                paddingHorizontal: spacing[2],
+                paddingHorizontal: spacing[1],
                 paddingVertical: spacing[2],
                 textAlign: 'right',
                 color: colors.primary,
                 fontWeight: 'bold',
               }}
             >
-              {(showCurrentTotalTime &&
-                props.session.duration &&
-                formatDuration(props.session.duration, 'hours-mins')) ||
-                '-'}
+              {currentDurationText}
             </Text>
           ) : (
             <View
@@ -171,10 +190,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
                   fontWeight: 'bold',
                 }}
               >
-                {(showCurrentTotalTime &&
-                  props.session.duration &&
-                  formatDuration(props.session.duration, 'hours-mins')) ||
-                  '-'}
+                {currentDurationText}
               </Text>
             </View>
           )}
@@ -182,7 +198,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
             <View
               style={{
                 flex: 0.34,
-                paddingHorizontal: spacing[2],
+                paddingHorizontal: spacing[1],
                 paddingVertical: spacing[2],
               }}
             />
@@ -210,16 +226,16 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
             style={{
               flex: 0.56,
               alignItems: 'flex-end',
-              paddingHorizontal: spacing[2],
+              paddingHorizontal: spacing[1],
               paddingVertical: spacing[2],
             }}
           >
-            {props.previousSession ? (
+            {previousTotalWeightLifted ? (
               <WeightFormat
                 decimalPlaces={0}
                 fontWeight="normal"
                 color="primary"
-                weight={props.previousSession.totalWeightLifted}
+                weight={previousTotalWeightLifted}
               />
             ) : (
               <Text variant="bodyMedium">-</Text>
@@ -232,7 +248,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
               style={{
                 flex: 0.56,
                 alignItems: 'flex-end',
-                paddingHorizontal: spacing[2],
+                paddingHorizontal: spacing[1],
                 paddingVertical: spacing[2],
               }}
             >
@@ -240,14 +256,14 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
                 decimalPlaces={0}
                 fontWeight="bold"
                 color="primary"
-                weight={props.session.totalWeightLifted}
+                weight={currentTotalWeightLifted}
               />
             </View>
             <View
               style={{
                 flex: 0.34,
                 alignItems: 'flex-end',
-                paddingHorizontal: spacing[2],
+                paddingHorizontal: spacing[1],
                 paddingVertical: spacing[2],
               }}
             >
@@ -270,7 +286,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
               decimalPlaces={0}
               fontWeight="bold"
               color="primary"
-              weight={props.session.totalWeightLifted}
+              weight={currentTotalWeightLifted}
             />
             {totalLiftedBadge}
           </View>
@@ -296,6 +312,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
             >
               <Text
                 variant="bodyMedium"
+                numberOfLines={2}
                 style={{
                   flex: 1.46,
                   paddingHorizontal: spacing[2],
@@ -308,7 +325,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
                 style={{
                   flex: 0.56,
                   alignItems: 'flex-end',
-                  paddingHorizontal: spacing[2],
+                  paddingHorizontal: spacing[1],
                   paddingVertical: spacing[2],
                 }}
               >
@@ -327,7 +344,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
                 style={{
                   flex: 0.56,
                   alignItems: 'flex-end',
-                  paddingHorizontal: spacing[2],
+                  paddingHorizontal: spacing[1],
                   paddingVertical: spacing[2],
                 }}
               >
@@ -342,7 +359,7 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
                 style={{
                   flex: 0.34,
                   alignItems: 'flex-end',
-                  paddingHorizontal: spacing[2],
+                  paddingHorizontal: spacing[1],
                   paddingVertical: spacing[2],
                 }}
               >
@@ -357,8 +374,6 @@ export function SessionComparisonTable(props: SessionComparisonTableProps) {
       ) : null}
     </View>
   );
-
-  return content;
 }
 
 function getWeightedExerciseComparisons(
