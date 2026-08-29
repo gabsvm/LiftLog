@@ -82,7 +82,7 @@ export function TimePeriodSelector({
       <SelectButton
         testID="stats-time-selector"
         value={timePeriod}
-        buttonProps={{ mode: 'outlined' }}
+        buttonProps={{ mode: 'contained-tonal' }}
         options={timeOptions}
         renderLabel={() => {
           if (timePeriod === 'all-time') {
