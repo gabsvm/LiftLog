@@ -8,6 +8,7 @@ import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import Holdable from '@/components/presentation/foundation/holdable';
 import { Jiggler } from '@/components/presentation/foundation/jiggler';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 
 interface RestTimerProps {
   rest: Rest;
@@ -49,18 +50,20 @@ export default function RestTimer({
               (rest.maxRest.toMillis() - rest.minRest.toMillis()),
             1,
           );
+    const isPastFinalTarget =
+      firstProgressBarProgress >= 1 &&
+      (secondProgressBarProgress >= 1 || secondProgressBarProgress === -1);
     const [textColor, backgroundColor]: [ColorChoice, ColorChoice] =
-      firstProgressBarProgress < 1
-        ? ['inverseOnSurface', 'inverseSurface']
-        : secondProgressBarProgress < 1 && secondProgressBarProgress !== -1
-          ? ['onGreen', 'green']
-          : ['onErrorContainer', 'errorContainer'];
+      isPastFinalTarget
+        ? ['onErrorContainer', 'errorContainer']
+        : ['onSurface', 'surfaceContainerHighest'];
     return {
       timeSinceStart,
       firstProgressBarProgress,
       secondProgressBarProgress,
       textColor,
       backgroundColor,
+      isPastFinalTarget,
     };
   }, [startTime, rest, failed, isSameMinMaxRest]);
 
@@ -81,7 +84,7 @@ export default function RestTimer({
   }, [resetTimer, triggerJiggle]);
 
   const pillHeight = spacing[14];
-  const pillWidth = pillHeight * 2.2;
+  const pillWidth = pillHeight * 2.35;
   const radius = (pillHeight - 6) / 2;
   const straightLength = pillWidth - pillHeight;
   const pillPerimeter = 2 * straightLength + 2 * Math.PI * radius;
@@ -110,10 +113,17 @@ export default function RestTimer({
             height: pillHeight,
             pointerEvents: 'none',
             overflow: 'hidden',
-            borderRadius: pillHeight,
+            borderRadius: gainsLabRadii.pill,
+            borderWidth: 1,
+            borderColor: timerState.isPastFinalTarget
+              ? colors.error
+              : timerState.firstProgressBarProgress >= 1
+                ? colors.primary
+                : colors.outlineVariant,
             backgroundColor: colors[timerState.backgroundColor],
             alignItems: 'center',
             justifyContent: 'center',
+            elevation: 4,
           },
           style,
         ]}
@@ -138,7 +148,7 @@ export default function RestTimer({
               pillPerimeter={pillPerimeter}
             />
             <PillProgressBar
-              color={colors.orange}
+              color={colors.warning}
               progress={timerState.secondProgressBarProgress}
               pillWidth={pillWidth}
               pillHeight={pillHeight}
@@ -152,7 +162,7 @@ export default function RestTimer({
           </Svg>
         </View>
         <SurfaceText
-          style={{ fontVariant: ['tabular-nums'] }}
+          style={{ fontVariant: ['tabular-nums'], letterSpacing: -0.5 }}
           font="text-2xl"
           weight="bold"
           color={timerState.textColor}
@@ -200,7 +210,7 @@ function PillProgressBar({
           a${pillHeight / 2 - 3},${pillHeight / 2 - 3} 0 0 1 0,-${pillHeight - 6}
           z`}
       stroke={color}
-      strokeWidth={6}
+      strokeWidth={4}
       fill="none"
       strokeDasharray={pillPerimeter}
       strokeDashoffset={pillPerimeter * (1 - clampedProgress)}
