@@ -3,11 +3,10 @@ import { ScreenHeading } from '@/components/presentation/foundation/screen-headi
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 import { Remote } from '@/components/presentation/foundation/remote';
 import { ExerciseListSummary } from '@/components/presentation/stats/exercise-list-summary';
-import SingleValueStatisticCard from '@/components/presentation/stats/single-value-statistic-card';
-import { SingleValueStatisticsGrid } from '@/components/presentation/stats/single-value-statistics-grid';
 import { TimePeriodSelector } from '@/components/presentation/stats/time-period-selector';
 import { TitledSection } from '@/components/presentation/stats/titled-section';
-import { spacing } from '@/hooks/useAppTheme';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { useAppSelector } from '@/store';
 import {
   fetchOverallStats,
@@ -18,7 +17,7 @@ import {
 import { formatDuration } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { ReactNode, useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
@@ -68,10 +67,112 @@ export default function StatsPage() {
 function LoadedStats({ stats }: { stats: GranularStatisticView }) {
   return (
     <View style={styles.loaded}>
-      <OverallStatsGrid stats={stats} />
+      <TrainingOverview stats={stats} />
       <ExerciseListSummary stats={stats} />
     </View>
   );
+}
+
+function TrainingOverview({ stats }: { stats: GranularStatisticView }) {
+  const { t } = useTranslate();
+  const { colors } = useAppTheme();
+
+  return (
+    <TitledSection title={t('stats.overview.title')}>
+      <View
+        style={{
+          borderRadius: gainsLabRadii.card,
+          backgroundColor: colors.surfaceContainerLow,
+          overflow: 'hidden',
+        }}
+      >
+        <View style={{ padding: spacing[5] }}>
+          <Text
+            style={{
+              fontSize: 40,
+              lineHeight: 46,
+              fontWeight: '800',
+              letterSpacing: -1.4,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {formatWeeklyRate(stats.workoutsPerWeek)}
+          </Text>
+          <Text
+            variant="labelMedium"
+            style={{
+              marginTop: spacing[1],
+              color: colors.onSurfaceVariant,
+              fontWeight: '700',
+            }}
+          >
+            {t('stats.workouts_per_week.label')}
+          </Text>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: colors.outlineVariant,
+          }}
+        >
+          <CompactMetric
+            label={t('stats.sets_per_week.label')}
+            value={formatWeeklyRate(stats.setsPerWeek)}
+          />
+          <MetricDivider />
+          <CompactMetric
+            label={t('workout.average_length.label')}
+            value={formatDuration(stats.averageSessionLength, 'mins')}
+          />
+          <MetricDivider />
+          <CompactMetric
+            label={t('stats.bodyweight_change.label')}
+            value={<BodyweightStatValue stats={stats} />}
+          />
+        </View>
+      </View>
+    </TitledSection>
+  );
+}
+
+function CompactMetric({ label, value }: { label: string; value: ReactNode }) {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 0,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[4],
+      }}
+    >
+      <Text
+        variant="titleMedium"
+        numberOfLines={1}
+        style={{ fontWeight: '800', fontVariant: ['tabular-nums'] }}
+      >
+        {value}
+      </Text>
+      <Text
+        variant="labelSmall"
+        numberOfLines={2}
+        style={{
+          marginTop: spacing[1],
+          color: colors.onSurfaceVariant,
+          lineHeight: 15,
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function MetricDivider() {
+  const { colors } = useAppTheme();
+  return <View style={{ width: 1, backgroundColor: colors.outlineVariant }} />;
 }
 
 const styles = StyleSheet.create({
@@ -85,39 +186,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   loaded: {
-    gap: spacing[4],
+    gap: spacing[6],
   },
 });
-
-function OverallStatsGrid({ stats }: { stats: GranularStatisticView }) {
-  const { t } = useTranslate();
-  return (
-    <TitledSection title={t('stats.overview.title')}>
-      <SingleValueStatisticsGrid>
-        <SingleValueStatisticCard
-          title={t('stats.workouts_per_week.label')}
-          value={formatWeeklyRate(stats.workoutsPerWeek)}
-          icon={'assignment'}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.sets_per_week.label')}
-          value={formatWeeklyRate(stats.setsPerWeek)}
-          icon={'function'}
-        />
-        <SingleValueStatisticCard
-          title={t('workout.average_length.label')}
-          icon={'avgTime'}
-          value={formatDuration(stats.averageSessionLength, 'mins')}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.bodyweight_change.label')}
-          icon={'monitorWeight'}
-          value={<BodyweightStatValue stats={stats} />}
-        />
-      </SingleValueStatisticsGrid>
-    </TitledSection>
-  );
-}
 
 function formatWeeklyRate(value: number) {
   return Math.abs(value - Math.round(value)) < 0.05
@@ -148,7 +219,7 @@ function BodyweightStatValue({
     .exhaustive();
 
   return (
-    <Text>
+    <Text style={{ fontVariant: ['tabular-nums'] }}>
       {currentValue.shortLocaleFormat(0)} ({changeDirection}
       {change.abs().shortLocaleFormat(2)})
     </Text>
