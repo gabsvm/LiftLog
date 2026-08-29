@@ -3,7 +3,11 @@ import {
   ScreenHeading,
   SectionHeading,
 } from '@/components/presentation/foundation/screen-heading';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
+import { AppIconSource } from '@/components/presentation/foundation/ms-icon-source';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
+import { useAppSelector } from '@/store';
+import { selectActiveProgram } from '@/store/program';
 import { T, useTranslate } from '@tolgee/react';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -20,6 +24,7 @@ export default function Settings() {
   const { push } = useRouter();
   const [appInfoOpen, setAppInfoOpen] = useState(false);
   const dispatch = useDispatch();
+  const activeProgram = useAppSelector(selectActiveProgram);
 
   const openUrl = (url: string) => {
     void Linking.canOpenURL(url).then(() => Linking.openURL(url));
@@ -44,20 +49,65 @@ export default function Settings() {
         subtitle={t('screen.settings.subtitle')}
       />
 
-      <SettingsGroup title={t('home.plan.section')}>
-        <List.Item
+      <View style={styles.group}>
+        <SectionHeading title={t('home.plan.section')} />
+        <Card
+          mode="contained"
           onPress={() => push('/settings/program-list')}
-          title={t('plan.manage.title')}
-          description={t('plan.manage.subtitle')}
-          left={(props) => <List.Icon icon={'assignment'} {...props} />}
-        />
-        <List.Item
-          onPress={() => push('/settings/manage-exercises')}
-          title={t('exercise.manage.button')}
-          description={t('exercise.manage.subtitle')}
-          left={(props) => <List.Icon icon={'directionsRun'} {...props} />}
-        />
-      </SettingsGroup>
+          style={[
+            styles.activePlanCard,
+            { backgroundColor: colors.surfaceContainerHigh },
+          ]}
+        >
+          <Card.Content style={styles.activePlanContent}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                variant="labelSmall"
+                style={{
+                  color: colors.primary,
+                  fontWeight: '800',
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t('home.plan.section')}
+              </Text>
+              <Text
+                variant="titleLarge"
+                numberOfLines={1}
+                style={{ marginTop: spacing[1], fontWeight: '800' }}
+              >
+                {activeProgram.name}
+              </Text>
+              <Text
+                variant="bodySmall"
+                numberOfLines={1}
+                style={{
+                  marginTop: spacing[1],
+                  color: colors.onSurfaceVariant,
+                }}
+              >
+                {t('plan.manage.subtitle')}
+              </Text>
+            </View>
+            <Icon source="chevronRight" size={24} color={colors.primary} />
+          </Card.Content>
+        </Card>
+        <SettingsCard>
+          <List.Item
+            onPress={() => push('/settings/manage-exercises')}
+            title={t('exercise.manage.button')}
+            description={t('exercise.manage.subtitle')}
+            left={(props) => <List.Icon icon={'directionsRun'} {...props} />}
+          />
+        </SettingsCard>
+      </View>
+
+      <GainsLabTools
+        openPlanner={() => push('/settings/ai/planner')}
+        openImport={() => push('/settings/import-ironlog')}
+        openFeed={() => push('/feed')}
+      />
 
       <SettingsGroup title={t('settings.account_data.title')}>
         <List.Item
@@ -96,27 +146,6 @@ export default function Settings() {
           title={t('settings.notifications.title')}
           description={t('settings.notifications.subtitle')}
           left={(props) => <List.Icon icon={'notifications'} {...props} />}
-        />
-      </SettingsGroup>
-
-      <SettingsGroup title="GainsLab">
-        <List.Item
-          onPress={() => push('/settings/ai/planner')}
-          title={t('ai.planner.title')}
-          description={t('ai.planner.subtitle')}
-          left={(props) => <List.Icon icon={'bolt'} {...props} />}
-        />
-        <List.Item
-          onPress={() => push('/settings/import-ironlog')}
-          title={t('settings.import_ironlog.title')}
-          description={t('settings.import_ironlog.subtitle')}
-          left={(props) => <List.Icon icon={'backup'} {...props} />}
-        />
-        <List.Item
-          onPress={() => push('/feed')}
-          title={t('feed.feed.title')}
-          description={t('feed.explanation.body')}
-          left={(props) => <List.Icon icon={'forum'} {...props} />}
         />
       </SettingsGroup>
 
@@ -181,6 +210,83 @@ export default function Settings() {
   );
 }
 
+function GainsLabTools({
+  openPlanner,
+  openImport,
+  openFeed,
+}: {
+  openPlanner: () => void;
+  openImport: () => void;
+  openFeed: () => void;
+}) {
+  const { t } = useTranslate();
+  return (
+    <View style={styles.group}>
+      <SectionHeading title="GainsLab" />
+      <View style={styles.toolGrid}>
+        <ToolTile
+          icon="bolt"
+          title={t('ai.planner.title')}
+          onPress={openPlanner}
+        />
+        <ToolTile
+          icon="backup"
+          title={t('settings.import_ironlog.title')}
+          onPress={openImport}
+        />
+      </View>
+      <SettingsCard>
+        <List.Item
+          onPress={openFeed}
+          title={t('feed.feed.title')}
+          description={t('feed.explanation.body')}
+          left={(props) => <List.Icon icon={'forum'} {...props} />}
+        />
+      </SettingsCard>
+    </View>
+  );
+}
+
+function ToolTile({
+  icon,
+  title,
+  onPress,
+}: {
+  icon: AppIconSource;
+  title: string;
+  onPress: () => void;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <Card
+      mode="contained"
+      onPress={onPress}
+      style={[
+        styles.toolTile,
+        { backgroundColor: colors.surfaceContainerHigh },
+      ]}
+    >
+      <Card.Content style={styles.toolTileContent}>
+        <View
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: gainsLabRadii.compact,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.surfaceContainerHighest,
+          }}
+        >
+          <Icon source={icon} size={21} color={colors.primary} />
+        </View>
+        <Text variant="titleMedium" numberOfLines={2} style={styles.toolTitle}>
+          {title}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+}
+
 function SettingsGroup({
   title,
   children,
@@ -210,7 +316,7 @@ function SettingsCard({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   content: {
-    gap: spacing[4],
+    gap: spacing[5],
     paddingTop: spacing[4],
     paddingBottom: spacing[8],
   },
@@ -218,7 +324,36 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   card: {
-    borderRadius: 20,
+    borderRadius: gainsLabRadii.card,
     overflow: 'hidden',
+  },
+  activePlanCard: {
+    borderRadius: gainsLabRadii.card,
+    overflow: 'hidden',
+  },
+  activePlanContent: {
+    minHeight: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  toolGrid: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  toolTile: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: gainsLabRadii.card,
+  },
+  toolTileContent: {
+    minHeight: 112,
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    padding: spacing[4],
+  },
+  toolTitle: {
+    fontWeight: '800',
+    lineHeight: 21,
   },
 });
