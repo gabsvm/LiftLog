@@ -20,6 +20,11 @@ interface HistoryCalendarCardProps {
   onDeleteSession: (session: Session) => void;
 }
 
+type CalendarDayModel = {
+  date: LocalDate;
+  label: string;
+};
+
 export default function HistoryCalendarCard({
   currentYearMonth,
   sessions,
@@ -28,23 +33,11 @@ export default function HistoryCalendarCard({
   onSessionSelect,
   onDeleteSession,
 }: HistoryCalendarCardProps) {
-  const firstDayOfMonth = LocalDate.of(
-    currentYearMonth.year(),
-    currentYearMonth.month(),
-    1,
-  );
+  const firstDayOfMonth = currentYearMonth.atDay(1);
   const today = LocalDate.now();
   const formatDate = useFormatDate();
-  const dayOfFirstDayOfTheMonth = firstDayOfMonth.dayOfWeek().value();
   const firstDayOfWeek = useAppSelector((x) => x.settings.firstDayOfWeek);
-  const numberOfDaysToShowFromPreviousMonth =
-    (dayOfFirstDayOfTheMonth - firstDayOfWeek.value() + 7) % 7;
-  const numberOfDaysToShowFromNextMonth =
-    (7 -
-      ((numberOfDaysToShowFromPreviousMonth +
-        currentYearMonth.lengthOfMonth()) %
-        7)) %
-    7;
+  const firstDayOfWeekValue = firstDayOfWeek.value();
   const disableNextMonth = currentYearMonth.equals(YearMonth.now());
 
   const sessionsByDate = useMemo(() => {
@@ -60,6 +53,48 @@ export default function HistoryCalendarCard({
     }
     return grouped;
   }, [sessions]);
+
+  const calendarWeeks = useMemo(() => {
+    const dayOfFirstDayOfTheMonth = firstDayOfMonth.dayOfWeek().value();
+    const previousCount =
+      (dayOfFirstDayOfTheMonth - firstDayOfWeekValue + 7) % 7;
+    const nextCount =
+      (7 - ((previousCount + currentYearMonth.lengthOfMonth()) % 7)) % 7;
+    const days: CalendarDayModel[] = [];
+
+    for (let offset = -previousCount; offset < 0; offset++) {
+      const date = firstDayOfMonth.plusDays(offset);
+      days.push({ date, label: formatDate(date, { day: 'numeric' }) });
+    }
+    for (let day = 1; day <= currentYearMonth.lengthOfMonth(); day++) {
+      const date = firstDayOfMonth.withDayOfMonth(day);
+      days.push({ date, label: formatDate(date, { day: 'numeric' }) });
+    }
+    for (let day = 1; day <= nextCount; day++) {
+      const date = firstDayOfMonth.plusMonths(1).withDayOfMonth(day);
+      days.push({ date, label: formatDate(date, { day: 'numeric' }) });
+    }
+
+    const weeks: CalendarDayModel[][] = [];
+    for (let index = 0; index < days.length; index += 7) {
+      weeks.push(days.slice(index, index + 7));
+    }
+    return weeks;
+  }, [currentYearMonth, firstDayOfMonth, firstDayOfWeekValue, formatDate]);
+
+  const dayHeaderLabels = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, offset) => {
+        const dayOfWeek = (offset + firstDayOfWeek.ordinal()) % 7;
+        return {
+          dayOfWeek,
+          label: formatDate(getDateOnDay(DayOfWeek.of(dayOfWeek + 1)), {
+            weekday: 'short',
+          }),
+        };
+      }),
+    [firstDayOfWeek, formatDate],
+  );
 
   const previousMonth = () => onMonthChange(currentYearMonth.minusMonths(1));
   const nextMonth = () => onMonthChange(currentYearMonth.plusMonths(1));
@@ -80,101 +115,19 @@ export default function HistoryCalendarCard({
     }
   };
 
-  const navButtons = (
-    <ForceLTRRow>
-      <View style={{ flex: 1 }}>
-        <IconButton
-          testID="calendar-nav-previous-month"
-          icon="chevronLeft"
-          onPress={previousMonth}
-        />
-      </View>
-      <View
-        style={{
-          flex: 5,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <SurfaceText testID="calendar-month">
-          {formatDate(firstDayOfMonth, {
-            month: 'long',
-            year:
-              currentYearMonth.year() === Year.now().value()
-                ? undefined
-                : 'numeric',
-          })}
-        </SurfaceText>
-      </View>
-      <View style={{ flex: 1 }}>
-        <IconButton
-          testID="calendar-nav-next-month"
-          icon="chevronRight"
-          onPress={nextMonth}
-          disabled={disableNextMonth}
-        />
-      </View>
-    </ForceLTRRow>
-  );
-
-  const dayHeaders = (
-    <ForceLTRRow>
-      {Array.from({ length: 7 }, (_, offset) => {
-        const dayOfWeek = (offset + firstDayOfWeek.ordinal()) % 7;
-        return (
-          <View style={{ flex: 1 }} key={dayOfWeek}>
-            <SurfaceText
-              style={{ marginBottom: spacing[2], textAlign: 'center' }}
-            >
-              {formatDate(getDateOnDay(DayOfWeek.of(dayOfWeek + 1)), {
-                weekday: 'short',
-              })}
-            </SurfaceText>
-          </View>
-        );
-      })}
-    </ForceLTRRow>
-  );
-
-  const renderDay = (date: LocalDate) => (
-    <HistoryCalendarDay
-      key={date.toString()}
-      sessions={sessionsByDate.get(date.toString()) ?? []}
-      day={date}
-      today={today}
-      onPress={() => handleDayPress(date)}
-      onLongPress={() => handleDayLongPress(date)}
-    />
-  );
-
-  const daysFromPreviousMonth = Array.from(
-    { length: numberOfDaysToShowFromPreviousMonth },
-    (_, offset) => {
-      offset = offset - numberOfDaysToShowFromPreviousMonth;
-      return renderDay(firstDayOfMonth.plusDays(offset));
-    },
-  );
-
-  const daysInMonth = Array.from(
-    { length: firstDayOfMonth.lengthOfMonth() },
-    (_, i) => renderDay(firstDayOfMonth.withDayOfMonth(i + 1)),
-  );
-
-  const daysFromNextMonth = Array.from(
-    { length: numberOfDaysToShowFromNextMonth },
-    (_, i) => renderDay(firstDayOfMonth.plusMonths(1).withDayOfMonth(i + 1)),
-  );
-
-  const daysInSections = [daysFromPreviousMonth, daysInMonth, daysFromNextMonth]
-    .flat()
-    .reduce(
-      (acc, cur) => {
-        if (acc[acc.length - 1]!.length === 7) acc.push([]);
-        acc[acc.length - 1]!.push(cur);
-        return acc;
-      },
-      [[]] as ReactNode[][],
-    );
+  const monthLabel = formatDate(firstDayOfMonth, {
+    month: 'long',
+    year:
+      currentYearMonth.year() === Year.now().value() ? undefined : 'numeric',
+  });
+  const previousMonthLabel = formatDate(currentYearMonth.minusMonths(1).atDay(1), {
+    month: 'long',
+    year: 'numeric',
+  });
+  const nextMonthLabel = formatDate(currentYearMonth.plusMonths(1).atDay(1), {
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
     <Card mode="contained">
@@ -182,10 +135,61 @@ export default function HistoryCalendarCard({
         <View
           style={{ justifyContent: 'center', alignItems: 'stretch', flex: 3 }}
         >
-          {navButtons}
-          {dayHeaders}
-          {daysInSections.map((days, i) => (
-            <ForceLTRRow key={i}>{days}</ForceLTRRow>
+          <ForceLTRRow>
+            <View style={{ flex: 1 }}>
+              <IconButton
+                testID="calendar-nav-previous-month"
+                icon="chevronLeft"
+                accessibilityLabel={previousMonthLabel}
+                onPress={previousMonth}
+              />
+            </View>
+            <View
+              style={{
+                flex: 5,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <SurfaceText testID="calendar-month">{monthLabel}</SurfaceText>
+            </View>
+            <View style={{ flex: 1 }}>
+              <IconButton
+                testID="calendar-nav-next-month"
+                icon="chevronRight"
+                accessibilityLabel={nextMonthLabel}
+                onPress={nextMonth}
+                disabled={disableNextMonth}
+              />
+            </View>
+          </ForceLTRRow>
+
+          <ForceLTRRow>
+            {dayHeaderLabels.map(({ dayOfWeek, label }) => (
+              <View style={{ flex: 1 }} key={dayOfWeek}>
+                <SurfaceText
+                  style={{ marginBottom: spacing[2], textAlign: 'center' }}
+                >
+                  {label}
+                </SurfaceText>
+              </View>
+            ))}
+          </ForceLTRRow>
+
+          {calendarWeeks.map((week) => (
+            <ForceLTRRow key={week[0]?.date.toString() ?? 'week'}>
+              {week.map(({ date, label }) => (
+                <HistoryCalendarDay
+                  key={date.toString()}
+                  sessions={sessionsByDate.get(date.toString()) ?? []}
+                  day={date}
+                  label={label}
+                  today={today}
+                  onPress={() => handleDayPress(date)}
+                  onLongPress={() => handleDayLongPress(date)}
+                />
+              ))}
+            </ForceLTRRow>
           ))}
         </View>
       </Card.Content>
@@ -195,6 +199,7 @@ export default function HistoryCalendarCard({
 
 function HistoryCalendarDay(props: {
   day: LocalDate;
+  label: string;
   today: LocalDate;
   sessions: Session[];
   onPress: () => void;
@@ -204,7 +209,6 @@ function HistoryCalendarDay(props: {
   const hasSessions = props.sessions.length > 0;
   const isTodayWithNoSessions = props.day.equals(props.today) && !hasSessions;
   const { colors } = useAppTheme();
-  const formatDate = useFormatDate();
 
   return (
     <View
@@ -219,6 +223,7 @@ function HistoryCalendarDay(props: {
         onPress={props.onPress}
         onLongPress={props.onLongPress}
         disabled={isFuture}
+        accessibilityLabel={props.day.toString()}
         style={{ padding: spacing[1], borderRadius: 1000, overflow: 'hidden' }}
       >
         <View
@@ -237,7 +242,7 @@ function HistoryCalendarDay(props: {
             style={{ textAlign: 'center' }}
             color={hasSessions ? 'onPrimary' : 'onSurface'}
           >
-            {formatDate(props.day, { day: 'numeric' })}
+            {props.label}
           </SurfaceText>
         </View>
       </TouchableRipple>
