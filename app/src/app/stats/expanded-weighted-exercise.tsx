@@ -1,8 +1,7 @@
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 import { Remote } from '@/components/presentation/foundation/remote';
 import { RepsBarChart } from '@/components/presentation/stats/reps-bar-chart';
-import SingleValueStatisticCard from '@/components/presentation/stats/single-value-statistic-card';
-import { SingleValueStatisticsGrid } from '@/components/presentation/stats/single-value-statistics-grid';
 import { TimePeriodSelector } from '@/components/presentation/stats/time-period-selector';
 import { TitledSection } from '@/components/presentation/stats/titled-section';
 import { WeightBarChart } from '@/components/presentation/stats/weight-bar-chart';
@@ -42,14 +41,20 @@ export default function ExpandedExercisePage() {
   return (
     <FullHeightScrollView
       scrollStyle={{ paddingHorizontal: spacing.pageHorizontalMargin }}
-      contentContainerStyle={{ gap: spacing[2], paddingBottom: spacing[8] }}
+      contentContainerStyle={{ gap: spacing[3], paddingBottom: spacing[8] }}
     >
       <Stack.Screen
         options={{
           title: exerciseName,
         }}
       />
-      <View style={{ flexDirection: 'row', justifyContent: 'center' }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-start',
+          paddingTop: spacing[2],
+        }}
+      >
         <TimePeriodSelector
           timePeriod={timePeriod}
           setTimePeriod={(value) => dispatch(setOverallViewTime(value))}
@@ -90,11 +95,11 @@ function LoadedStatsFilled({ stats }: { stats: WeightedExerciseStatistics }) {
   }, [stats]);
 
   return (
-    <View style={{ gap: spacing[4] }}>
-      <OverallStatsGrid stats={stats} />
+    <View style={{ gap: spacing[6] }}>
+      <ExerciseOverview stats={stats} />
       {showCharts ? (
         <>
-          <StatCardWithTitle title={t('stats.exercise.max_weight.title')}>
+          <StatCardWithTitle title={t('stats.exercise.max_weight.title')} hero>
             <WeightLineChart statistics={stats.maxLiftedPerSessionStatistics} />
           </StatCardWithTitle>
           <StatCardWithTitle title={t('stats.exercise.1rm_progress.title')}>
@@ -115,63 +120,181 @@ function LoadedStatsFilled({ stats }: { stats: WeightedExerciseStatistics }) {
   );
 }
 
-function StatCardWithTitle(props: { title: string; children: ReactNode }) {
+function ExerciseOverview({ stats }: { stats: WeightedExerciseStatistics }) {
+  const { colors } = useAppTheme();
+  const { t } = useTranslate();
+  const usualRepRange = getUsualRepRange(stats);
+
+  return (
+    <TitledSection title={t('stats.exercise.overview.title')}>
+      <View
+        style={{
+          borderRadius: gainsLabRadii.card,
+          overflow: 'hidden',
+          backgroundColor: colors.surfaceContainerLow,
+        }}
+      >
+        <View style={{ padding: spacing[5] }}>
+          <Text
+            style={{
+              fontSize: 38,
+              lineHeight: 44,
+              fontWeight: '800',
+              letterSpacing: -1.2,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {stats.maxLiftedPerSessionStatistics.currentValue.shortLocaleFormat()}
+          </Text>
+          <Text
+            variant="labelMedium"
+            style={{
+              marginTop: spacing[1],
+              color: colors.onSurfaceVariant,
+              fontWeight: '700',
+            }}
+          >
+            {t('stats.exercise.current_weight.label')}
+          </Text>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: colors.outlineVariant,
+          }}
+        >
+          <CompactMetric
+            label={t('stats.exercise.sets_per_week.label')}
+            value={formatWeeklyRate(stats.setsPerWeek)}
+          />
+          <MetricDivider />
+          <CompactMetric
+            label={t('stats.exercise.estimated_1rm.label')}
+            value={stats.max1RMPerSessionStatistics.currentValue.shortLocaleFormat(
+              0,
+            )}
+          />
+          <MetricDivider />
+          <CompactMetric
+            label={t('stats.exercise.usual_rep_range.label')}
+            value={usualRepRange}
+          />
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: colors.outlineVariant,
+          }}
+        >
+          <InlineMetric
+            label={t('stats.exercise.max_weight.label')}
+            value={stats.maxLiftedPerSessionStatistics.maxValue.shortLocaleFormat()}
+          />
+          <InlineMetric
+            label={t('stats.exercise.total_lifted.label')}
+            value={stats.totalVolumeStatistics.totalValue.shortLocaleFormat(0)}
+          />
+        </View>
+      </View>
+    </TitledSection>
+  );
+}
+
+function CompactMetric({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 0,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[4],
+      }}
+    >
+      <Text
+        variant="titleMedium"
+        numberOfLines={1}
+        style={{ fontWeight: '800', fontVariant: ['tabular-nums'] }}
+      >
+        {value}
+      </Text>
+      <Text
+        variant="labelSmall"
+        numberOfLines={2}
+        style={{
+          marginTop: spacing[1],
+          color: colors.onSurfaceVariant,
+          lineHeight: 15,
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function InlineMetric({ label, value }: { label: string; value: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: spacing[2],
+        padding: spacing[3],
+      }}
+    >
+      <Text
+        variant="labelSmall"
+        numberOfLines={1}
+        style={{ color: colors.onSurfaceVariant, flex: 1 }}
+      >
+        {label}
+      </Text>
+      <Text
+        variant="labelMedium"
+        numberOfLines={1}
+        style={{ fontWeight: '800', fontVariant: ['tabular-nums'] }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function MetricDivider() {
+  const { colors } = useAppTheme();
+  return <View style={{ width: 1, backgroundColor: colors.outlineVariant }} />;
+}
+
+function StatCardWithTitle(props: {
+  title: string;
+  children: ReactNode;
+  hero?: boolean;
+}) {
   const { colors } = useAppTheme();
   return (
     <TitledSection title={props.title}>
       <Card
         mode="contained"
         style={{
-          backgroundColor: colors.surfaceContainer,
+          borderRadius: gainsLabRadii.card,
+          backgroundColor: props.hero
+            ? colors.surfaceContainerHigh
+            : colors.surfaceContainerLow,
         }}
       >
         <Card.Content style={{ paddingVertical: spacing[5] }}>
           {props.children}
         </Card.Content>
       </Card>
-    </TitledSection>
-  );
-}
-
-function OverallStatsGrid({ stats }: { stats: WeightedExerciseStatistics }) {
-  const { t } = useTranslate();
-  const usualRepRange = getUsualRepRange(stats);
-  return (
-    <TitledSection title={t('stats.exercise.overview.title')}>
-      <SingleValueStatisticsGrid>
-        <SingleValueStatisticCard
-          title={t('stats.exercise.sets_per_week.label')}
-          icon={'function'}
-          value={formatWeeklyRate(stats.setsPerWeek)}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.exercise.current_weight.label')}
-          icon={'weight'}
-          value={stats.maxLiftedPerSessionStatistics.currentValue.shortLocaleFormat()}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.exercise.max_weight.label')}
-          icon={'fitnessCenter'}
-          value={stats.maxLiftedPerSessionStatistics.maxValue.shortLocaleFormat()}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.exercise.total_lifted.label')}
-          icon={'anchor'}
-          value={stats.totalVolumeStatistics.totalValue.shortLocaleFormat(0)}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.exercise.estimated_1rm.label')}
-          icon={'function'}
-          value={stats.max1RMPerSessionStatistics.currentValue.shortLocaleFormat(
-            0,
-          )}
-        />
-        <SingleValueStatisticCard
-          title={t('stats.exercise.usual_rep_range.label')}
-          icon={'barChart'}
-          value={usualRepRange}
-        />
-      </SingleValueStatisticsGrid>
     </TitledSection>
   );
 }
