@@ -1,4 +1,9 @@
 import ItemTitle from '@/components/presentation/foundation/item-title';
+import WeightFormat from '@/components/presentation/foundation/weight-format';
+import {
+  gainsLabRadii,
+  gainsLabTouchTarget,
+} from '@/components/presentation/foundation/gainslab-ui';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import {
   RecordedExercise,
@@ -49,10 +54,32 @@ export default function ExerciseSection<T extends RecordedExercise>(
   const [removeExerciseDialogOpen, setRemoveExerciseDialogOpen] =
     useState(false);
   const showStats = recordedExercise instanceof RecordedWeightedExercise;
+  const isCompletedWeightedExercise =
+    recordedExercise instanceof RecordedWeightedExercise &&
+    recordedExercise.potentialSets.length > 0 &&
+    recordedExercise.potentialSets.every((potentialSet) => !!potentialSet.set);
+  const previousWeightedExercise = showStats
+    ? props.previousRecordedExercises.find(
+        (exercise) => exercise instanceof RecordedWeightedExercise,
+      )
+    : undefined;
+  const previousCompletedSets =
+    previousWeightedExercise instanceof RecordedWeightedExercise
+      ? previousWeightedExercise.potentialSets.flatMap((potentialSet) =>
+          potentialSet.set ? [potentialSet.set.repsCompleted] : [],
+        )
+      : [];
+  const previousWeight =
+    previousWeightedExercise instanceof RecordedWeightedExercise
+      ? (previousWeightedExercise.potentialSets.find(
+          (potentialSet) => !!potentialSet.set,
+        )?.weight ?? previousWeightedExercise.potentialSets.at(0)?.weight)
+      : undefined;
+  const showPreviousSummary = previousCompletedSets.length > 0;
   const supersetConnectorAnchor = spacing[4] + spacing[2] + 14;
 
   const interactiveButtons = props.isReadonly ? (
-    <View style={{ height: 48 }} />
+    <View style={{ height: gainsLabTouchTarget.minimum }} />
   ) : (
     <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
       {props.showPreviousButton ? (
@@ -179,13 +206,32 @@ export default function ExerciseSection<T extends RecordedExercise>(
           paddingBlock: spacing[4],
           paddingHorizontal: spacing.pageHorizontalMargin,
           marginHorizontal: spacing.pageHorizontalMargin,
-          borderRadius: 20,
-          backgroundColor: colors.surfaceContainer,
+          borderRadius: gainsLabRadii.card,
+          borderWidth: props.toStartNext ? 1 : 0,
+          borderColor: props.toStartNext ? colors.primary + '70' : 'transparent',
+          backgroundColor: props.toStartNext
+            ? colors.surfaceContainerHigh
+            : isCompletedWeightedExercise
+              ? colors.surfaceContainerLow
+              : colors.surfaceContainer,
           overflow: 'hidden',
         }}
         testID="weighted-exercise"
       >
         <View>
+          {props.toStartNext && !props.isReadonly ? (
+            <Text
+              variant="labelSmall"
+              style={{
+                color: colors.primary,
+                fontWeight: '800',
+                letterSpacing: 1.2,
+                marginBottom: spacing[1],
+              }}
+            >
+              NEXT
+            </Text>
+          ) : null}
           <View
             style={{
               flexDirection: 'row',
@@ -212,7 +258,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
                     justifyContent: 'center',
                     borderWidth: 1,
                     borderColor: colors.primary,
-                    borderRadius: 14,
+                    borderRadius: gainsLabRadii.pill,
                     backgroundColor: colors.surfaceContainerHighest,
                   }}
                 >
@@ -232,6 +278,52 @@ export default function ExerciseSection<T extends RecordedExercise>(
             </View>
             {interactiveButtons}
           </View>
+          {showPreviousSummary ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing[1],
+                marginTop: -spacing[1],
+                marginBottom: spacing[3],
+              }}
+            >
+              <Text
+                variant="labelSmall"
+                style={{
+                  color: colors.onSurfaceVariant,
+                  fontWeight: '800',
+                  letterSpacing: 0.7,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t('generic.previous.button')}
+              </Text>
+              <Text
+                variant="labelSmall"
+                style={{ color: colors.onSurfaceVariant }}
+              >
+                ·
+              </Text>
+              <WeightFormat
+                weight={previousWeight}
+                color="onSurfaceVariant"
+                fontSize="text-xs"
+                fontWeight="700"
+                decimalPlaces={2}
+              />
+              <Text
+                variant="labelSmall"
+                style={{
+                  color: colors.onSurfaceVariant,
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                × {previousCompletedSets.join(' · ')}
+              </Text>
+            </View>
+          ) : null}
           {props.children}
           <ExerciseNotesDisplay
             exercise={props.recordedExercise}
