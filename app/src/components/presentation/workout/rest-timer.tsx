@@ -148,7 +148,7 @@ export default function RestTimer({
               pillPerimeter={pillPerimeter}
             />
             <PillProgressBar
-              color={colors.warning}
+              color={colors.amber}
               progress={timerState.secondProgressBarProgress}
               pillWidth={pillWidth}
               pillHeight={pillHeight}
