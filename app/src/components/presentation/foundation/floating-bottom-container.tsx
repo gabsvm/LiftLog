@@ -11,17 +11,18 @@ export default function FloatingBottomContainer({
 }) {
   return (
     <View
+      pointerEvents="box-none"
       style={{
         flex: 1,
         marginTop: 'auto',
         padding: spacing.pageHorizontalMargin,
         gap: spacing[2],
         zIndex: 10,
-        pointerEvents: 'box-none',
       }}
     >
       {fab ? (
         <View
+          pointerEvents="box-none"
           style={{
             flex: 1,
             flexDirection: 'row',
