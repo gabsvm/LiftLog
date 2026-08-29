@@ -6,6 +6,7 @@ import {
 } from '@/components/presentation/foundation/gainslab-ui';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import {
+  RecordedCardioExercise,
   RecordedExercise,
   RecordedWeightedExercise,
 } from '@/models/session-models';
@@ -54,10 +55,14 @@ export default function ExerciseSection<T extends RecordedExercise>(
   const [removeExerciseDialogOpen, setRemoveExerciseDialogOpen] =
     useState(false);
   const showStats = recordedExercise instanceof RecordedWeightedExercise;
-  const isCompletedWeightedExercise =
-    recordedExercise instanceof RecordedWeightedExercise &&
-    recordedExercise.potentialSets.length > 0 &&
-    recordedExercise.potentialSets.every((potentialSet) => !!potentialSet.set);
+  const isCompletedExercise =
+    recordedExercise instanceof RecordedWeightedExercise
+      ? recordedExercise.potentialSets.length > 0 &&
+        recordedExercise.potentialSets.every((potentialSet) => !!potentialSet.set)
+      : recordedExercise instanceof RecordedCardioExercise
+        ? recordedExercise.sets.length > 0 &&
+          recordedExercise.sets.every((set) => set.isCompletelyFilled)
+        : false;
   const previousWeightedExercise = showStats
     ? props.previousRecordedExercises.find(
         (exercise) => exercise instanceof RecordedWeightedExercise,
@@ -211,7 +216,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
           borderColor: props.toStartNext ? colors.primary + '70' : 'transparent',
           backgroundColor: props.toStartNext
             ? colors.surfaceContainerHigh
-            : isCompletedWeightedExercise
+            : isCompletedExercise
               ? colors.surfaceContainerLow
               : colors.surfaceContainer,
           overflow: 'hidden',
