@@ -4,6 +4,7 @@ import { createAction, createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 interface HistoryViewState {
   requestedRangeKey?: string;
+  loadedRangeKey?: string;
   from?: string;
   to?: string;
   isLoading: boolean;
@@ -44,6 +45,7 @@ const historyViewSlice = createSlice({
       // Ignore a slow query for a month the user has already navigated away from.
       if (state.requestedRangeKey !== action.payload.rangeKey) return;
       state.sessions = action.payload.sessions;
+      state.loadedRangeKey = action.payload.rangeKey;
       state.isLoading = false;
     },
     applyHistorySessionChanges(state, action: PayloadAction<Session[]>) {
