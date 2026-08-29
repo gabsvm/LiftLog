@@ -75,6 +75,11 @@ export default function RestTimer({
     setTimeout(() => setJiggling(false), 10);
   }, []);
 
+  const handleReset = useCallback(() => {
+    resetTimer();
+    triggerJiggle('reset');
+  }, [resetTimer, triggerJiggle]);
+
   const pillHeight = spacing[14];
   const pillWidth = pillHeight * 2.2;
   const radius = (pillHeight - 6) / 2;
@@ -95,12 +100,7 @@ export default function RestTimer({
   }, [getTimerState, triggerJiggle]);
 
   return (
-    <Holdable
-      onLongPress={() => {
-        resetTimer();
-        triggerJiggle('reset');
-      }}
-    >
+    <Holdable onLongPress={handleReset}>
       <Jiggler
         testID="rest-timer"
         jiggling={jiggling}
