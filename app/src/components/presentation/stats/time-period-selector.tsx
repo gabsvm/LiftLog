@@ -1,6 +1,7 @@
 import SelectButton, {
   SelectButtonOption,
 } from '@/components/presentation/foundation/select-button';
+import { useFormatDate } from '@/hooks/useFormatDate';
 import { isLocalDateRangeEqual, LocalDateRange } from '@/models/time-models';
 import { convert, LocalDate, nativeJs, Period } from '@js-joda/core';
 import { useTranslate } from '@tolgee/react';
@@ -19,6 +20,7 @@ export function TimePeriodSelector({
   const today = LocalDate.now();
   const [timeRangeSelectorOpen, setTimeRangeSelectorOpen] = useState(false);
   const { t } = useTranslate();
+  const formatDate = useFormatDate();
   const timeOptions: SelectButtonOption<
     LocalDateRange | 'all-time' | 'custom'
   >[] = [
@@ -91,7 +93,15 @@ export function TimePeriodSelector({
           );
 
           if (!selectedOption) {
-            return `${timePeriod.from.toString()} - ${timePeriod.to.toString()}`;
+            const dateOptions: Intl.DateTimeFormatOptions = {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            };
+            return `${formatDate(timePeriod.from, dateOptions)} – ${formatDate(
+              timePeriod.to,
+              dateOptions,
+            )}`;
           }
           return selectedOption.label;
         }}
@@ -103,15 +113,23 @@ export function TimePeriodSelector({
           }
         }}
       />
-      {timeRangeSelectorOpen && timePeriod !== 'all-time' ? (
+      {timeRangeSelectorOpen ? (
         <DatePickerModal
           locale="default"
           mode="range"
           visible
           onDismiss={() => setTimeRangeSelectorOpen(false)}
           onConfirm={handleCustomRangePicked}
-          startDate={convert(timePeriod.from).toDate()}
-          endDate={convert(timePeriod.to).toDate()}
+          startDate={
+            timePeriod === 'all-time'
+              ? undefined
+              : convert(timePeriod.from).toDate()
+          }
+          endDate={
+            timePeriod === 'all-time'
+              ? undefined
+              : convert(timePeriod.to).toDate()
+          }
         />
       ) : null}
     </>
