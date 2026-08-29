@@ -14,6 +14,10 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import {
+  TabBarVisibilityProvider,
+  useTabBarHidden,
+} from '@/hooks/useTabBarVisibility';
 
 void SplashScreen.preventAutoHideAsync().catch((error: unknown) => {
   console.warn('Could not keep the native splash screen visible.', error);
@@ -66,10 +70,21 @@ export default function RootLayout() {
 }
 
 function Layout() {
+  return (
+    <TabBarVisibilityProvider>
+      <NativeTabLayout />
+    </TabBarVisibilityProvider>
+  );
+}
+
+function NativeTabLayout() {
   const { t } = useTranslate();
   const { colors } = useAppTheme();
+  const tabBarHidden = useTabBarHidden();
+
   return (
     <NativeTabs
+      hidden={tabBarHidden}
       indicatorColor={colors.primaryContainer}
       rippleColor={colors.primary}
       backgroundColor={colors.surfaceContainerLow}
