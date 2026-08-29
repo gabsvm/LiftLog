@@ -60,22 +60,24 @@ export default function SelectButton<
       }
       anchorPosition="bottom"
     >
-      <ScrollView>
-        {options.map(
-          (option) =>
-            !option.disabledAndHidden && (
-              <Menu.Item
-                key={option.label}
-                title={option.label}
-                onPress={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                }}
-                trailingIcon={option.value === value ? 'check' : undefined!}
-              />
-            ),
-        )}
-      </ScrollView>
+      {open ? (
+        <ScrollView>
+          {options.map(
+            (option) =>
+              !option.disabledAndHidden && (
+                <Menu.Item
+                  key={option.label}
+                  title={option.label}
+                  onPress={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  trailingIcon={isEqual(option.value, value) ? 'check' : undefined!}
+                />
+              ),
+          )}
+        </ScrollView>
+      ) : null}
     </Menu>
   );
 }
