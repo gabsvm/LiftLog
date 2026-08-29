@@ -40,7 +40,7 @@ export default function Settings() {
         options={{ title: t('navigation.more'), headerShown: false }}
       />
       <ScreenHeading
-        title={t('settings.settings.title')}
+        title={t('navigation.more')}
         subtitle={t('screen.settings.subtitle')}
       />
 
@@ -99,7 +99,7 @@ export default function Settings() {
         />
       </SettingsGroup>
 
-      <SettingsCard>
+      <SettingsGroup title="GainsLab">
         <List.Item
           onPress={() => push('/settings/ai/planner')}
           title={t('ai.planner.title')}
@@ -118,7 +118,7 @@ export default function Settings() {
           description={t('feed.explanation.body')}
           left={(props) => <List.Icon icon={'forum'} {...props} />}
         />
-      </SettingsCard>
+      </SettingsGroup>
 
       <SettingsGroup title={t('settings.support.title')}>
         <List.Item
