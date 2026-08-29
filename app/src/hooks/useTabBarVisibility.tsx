@@ -1,28 +1,28 @@
 import { useFocusEffect } from 'expo-router';
 import {
   createContext,
-  Dispatch,
-  ReactNode,
-  SetStateAction,
   useCallback,
   useContext,
   useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
 } from 'react';
 
 const TabBarHiddenContext = createContext(false);
-const TabBarVisibilitySetterContext = createContext<
-  Dispatch<SetStateAction<boolean>> | undefined
+const TabBarHiddenCountSetterContext = createContext<
+  Dispatch<SetStateAction<number>> | undefined
 >(undefined);
 
 export function TabBarVisibilityProvider({ children }: { children: ReactNode }) {
-  const [hidden, setHidden] = useState(false);
+  const [hiddenCount, setHiddenCount] = useState(0);
 
   return (
-    <TabBarVisibilitySetterContext.Provider value={setHidden}>
-      <TabBarHiddenContext.Provider value={hidden}>
+    <TabBarHiddenCountSetterContext.Provider value={setHiddenCount}>
+      <TabBarHiddenContext.Provider value={hiddenCount > 0}>
         {children}
       </TabBarHiddenContext.Provider>
-    </TabBarVisibilitySetterContext.Provider>
+    </TabBarHiddenCountSetterContext.Provider>
   );
 }
 
@@ -31,12 +31,13 @@ export function useTabBarHidden() {
 }
 
 export function useHideTabBarWhileFocused() {
-  const setHidden = useContext(TabBarVisibilitySetterContext);
+  const setHiddenCount = useContext(TabBarHiddenCountSetterContext);
 
   useFocusEffect(
     useCallback(() => {
-      setHidden?.(true);
-      return () => setHidden?.(false);
-    }, [setHidden]),
+      setHiddenCount?.((count) => count + 1);
+      return () =>
+        setHiddenCount?.((count) => Math.max(0, count - 1));
+    }, [setHiddenCount]),
   );
 }
