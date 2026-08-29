@@ -33,7 +33,10 @@ export default function HistoryCalendarCard({
   onSessionSelect,
   onDeleteSession,
 }: HistoryCalendarCardProps) {
-  const firstDayOfMonth = currentYearMonth.atDay(1);
+  const firstDayOfMonth = useMemo(
+    () => currentYearMonth.atDay(1),
+    [currentYearMonth],
+  );
   const today = LocalDate.now();
   const formatDate = useFormatDate();
   const firstDayOfWeek = useAppSelector((x) => x.settings.firstDayOfWeek);
