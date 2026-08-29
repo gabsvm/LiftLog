@@ -207,7 +207,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
           paddingHorizontal: spacing.pageHorizontalMargin,
           marginHorizontal: spacing.pageHorizontalMargin,
           borderRadius: gainsLabRadii.card,
-          borderWidth: props.toStartNext ? 1 : 0,
+          borderWidth: 1,
           borderColor: props.toStartNext ? colors.primary + '70' : 'transparent',
           backgroundColor: props.toStartNext
             ? colors.surfaceContainerHigh
@@ -219,19 +219,6 @@ export default function ExerciseSection<T extends RecordedExercise>(
         testID="weighted-exercise"
       >
         <View>
-          {props.toStartNext && !props.isReadonly ? (
-            <Text
-              variant="labelSmall"
-              style={{
-                color: colors.primary,
-                fontWeight: '800',
-                letterSpacing: 1.2,
-                marginBottom: spacing[1],
-              }}
-            >
-              NEXT
-            </Text>
-          ) : null}
           <View
             style={{
               flexDirection: 'row',
