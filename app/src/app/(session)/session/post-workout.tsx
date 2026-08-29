@@ -5,6 +5,7 @@ import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui'
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 import { SessionComparisonTable } from '@/components/presentation/workout/session-comparison-table';
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
+import { useHideTabBarWhileFocused } from '@/hooks/useTabBarVisibility';
 import { useAppSelectorWithArg } from '@/store';
 import {
   finishCurrentWorkout,
@@ -23,6 +24,7 @@ import { FAB, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 
 export default function PostWorkoutPage() {
+  useHideTabBarWhileFocused();
   const { sessionId, source } = useLocalSearchParams<{
     sessionId?: string;
     source?: 'finished' | 'live' | 'history';
