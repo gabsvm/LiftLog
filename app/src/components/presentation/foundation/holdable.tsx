@@ -1,5 +1,5 @@
 import { triggerClickHaptic } from '~/modules/native-lib/src/ReactNativeHapticsModule';
-import { ReactNode } from 'react';
+import { ReactNode, useCallback, useMemo } from 'react';
 import { View, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
@@ -26,17 +26,21 @@ export default function Holdable({
   style,
   disabled,
 }: HoldableProps) {
-  const handleLongPress = () => {
+  const handleLongPress = useCallback(() => {
     triggerClickHaptic();
     onLongPress();
-  };
+  }, [onLongPress]);
 
-  const gesture = disabled
-    ? Gesture.Manual()
-    : Gesture.LongPress()
-        .minDuration(duration)
-        .runOnJS(true)
-        .onStart(handleLongPress);
+  const gesture = useMemo(
+    () =>
+      disabled
+        ? Gesture.Manual()
+        : Gesture.LongPress()
+            .minDuration(duration)
+            .runOnJS(true)
+            .onStart(handleLongPress),
+    [disabled, duration, handleLongPress],
+  );
 
   return (
     <GestureDetector gesture={gesture}>
