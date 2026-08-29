@@ -68,17 +68,23 @@ export default function ExerciseSection<T extends RecordedExercise>(
         (exercise) => exercise instanceof RecordedWeightedExercise,
       )
     : undefined;
-  const previousCompletedSets =
+  const previousCompletedPotentialSets =
     previousWeightedExercise instanceof RecordedWeightedExercise
-      ? previousWeightedExercise.potentialSets.flatMap((potentialSet) =>
-          potentialSet.set ? [potentialSet.set.repsCompleted] : [],
+      ? previousWeightedExercise.potentialSets.filter(
+          (potentialSet) => !!potentialSet.set,
         )
       : [];
+  const previousCompletedSets = previousCompletedPotentialSets.flatMap(
+    (potentialSet) =>
+      potentialSet.set ? [potentialSet.set.repsCompleted] : [],
+  );
+  const firstPreviousWeight = previousCompletedPotentialSets.at(0)?.weight;
   const previousWeight =
-    previousWeightedExercise instanceof RecordedWeightedExercise
-      ? (previousWeightedExercise.potentialSets.find(
-          (potentialSet) => !!potentialSet.set,
-        )?.weight ?? previousWeightedExercise.potentialSets.at(0)?.weight)
+    firstPreviousWeight &&
+    previousCompletedPotentialSets.every((potentialSet) =>
+      potentialSet.weight.equals(firstPreviousWeight, true),
+    )
+      ? firstPreviousWeight
       : undefined;
   const showPreviousSummary = previousCompletedSets.length > 0;
   const supersetConnectorAnchor = spacing[4] + spacing[2] + 14;
@@ -298,13 +304,15 @@ export default function ExerciseSection<T extends RecordedExercise>(
               >
                 ·
               </Text>
-              <WeightFormat
-                weight={previousWeight}
-                color="onSurfaceVariant"
-                fontSize="text-xs"
-                fontWeight="700"
-                decimalPlaces={2}
-              />
+              {previousWeight ? (
+                <WeightFormat
+                  weight={previousWeight}
+                  color="onSurfaceVariant"
+                  fontSize="text-xs"
+                  fontWeight="700"
+                  decimalPlaces={2}
+                />
+              ) : null}
               <Text
                 variant="labelSmall"
                 style={{
@@ -312,7 +320,8 @@ export default function ExerciseSection<T extends RecordedExercise>(
                   fontVariant: ['tabular-nums'],
                 }}
               >
-                × {previousCompletedSets.join(' · ')}
+                {previousWeight ? '× ' : ''}
+                {previousCompletedSets.join(' · ')}
               </Text>
             </View>
           ) : null}
