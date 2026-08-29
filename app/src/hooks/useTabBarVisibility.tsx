@@ -1,39 +1,42 @@
 import { useFocusEffect } from 'expo-router';
 import {
   createContext,
+  Dispatch,
   ReactNode,
+  SetStateAction,
   useCallback,
   useContext,
   useState,
 } from 'react';
 
-const TabBarVisibilityContext = createContext<{
-  hidden: boolean;
-  setHidden: (hidden: boolean) => void;
-} | null>(null);
+const TabBarHiddenContext = createContext(false);
+const TabBarVisibilitySetterContext = createContext<
+  Dispatch<SetStateAction<boolean>> | undefined
+>(undefined);
 
 export function TabBarVisibilityProvider({ children }: { children: ReactNode }) {
   const [hidden, setHidden] = useState(false);
 
   return (
-    <TabBarVisibilityContext.Provider value={{ hidden, setHidden }}>
-      {children}
-    </TabBarVisibilityContext.Provider>
+    <TabBarVisibilitySetterContext.Provider value={setHidden}>
+      <TabBarHiddenContext.Provider value={hidden}>
+        {children}
+      </TabBarHiddenContext.Provider>
+    </TabBarVisibilitySetterContext.Provider>
   );
 }
 
 export function useTabBarHidden() {
-  const context = useContext(TabBarVisibilityContext);
-  return context?.hidden ?? false;
+  return useContext(TabBarHiddenContext);
 }
 
 export function useHideTabBarWhileFocused() {
-  const context = useContext(TabBarVisibilityContext);
+  const setHidden = useContext(TabBarVisibilitySetterContext);
 
   useFocusEffect(
     useCallback(() => {
-      context?.setHidden(true);
-      return () => context?.setHidden(false);
-    }, [context]),
+      setHidden?.(true);
+      return () => setHidden?.(false);
+    }, [setHidden]),
   );
 }
