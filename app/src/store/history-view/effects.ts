@@ -20,8 +20,20 @@ import {
 export function applyHistoryViewEffects(addEffect: AddEffectFn) {
   addEffect(
     requestHistoryRange,
-    async (action, { dispatch, extra: { db, logger } }) => {
+    async (action, { getState, dispatch, extra: { db, logger } }) => {
       const rangeKey = historyRangeKey(action.payload);
+      const historyView = getState().historyView;
+
+      // Re-focusing History should not hit SQLite again when the same calendar
+      // range is already in memory. Also coalesce duplicate requests while the
+      // first query for that range is still in flight.
+      if (
+        historyView.loadedRangeKey === rangeKey ||
+        (historyView.requestedRangeKey === rangeKey && historyView.isLoading)
+      ) {
+        return;
+      }
+
       dispatch(
         beginHistoryRangeLoad({
           rangeKey,
