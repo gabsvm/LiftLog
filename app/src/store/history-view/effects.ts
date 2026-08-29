@@ -25,10 +25,11 @@ export function applyHistoryViewEffects(addEffect: AddEffectFn) {
       const historyView = getState().historyView;
 
       // Re-focusing History should not hit SQLite again when the same calendar
-      // range is already in memory. Also coalesce duplicate requests while the
-      // first query for that range is still in flight.
+      // range is already in memory. Coalesce duplicate requests while a query
+      // for that same range is in flight, but never suppress navigation back to
+      // a cached range while a different month's query is still running.
       if (
-        historyView.loadedRangeKey === rangeKey ||
+        (historyView.loadedRangeKey === rangeKey && !historyView.isLoading) ||
         (historyView.requestedRangeKey === rangeKey && historyView.isLoading)
       ) {
         return;
