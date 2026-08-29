@@ -40,7 +40,10 @@ export default function ExpandedExercisePage() {
   }, [exerciseName, dismissTo]);
   const stats = useAppSelectorWithArg(selectExerciseView, exerciseName);
   return (
-    <FullHeightScrollView contentContainerStyle={{ gap: spacing[2] }}>
+    <FullHeightScrollView
+      scrollStyle={{ paddingHorizontal: spacing.pageHorizontalMargin }}
+      contentContainerStyle={{ gap: spacing[2], paddingBottom: spacing[8] }}
+    >
       <Stack.Screen
         options={{
           title: exerciseName,
