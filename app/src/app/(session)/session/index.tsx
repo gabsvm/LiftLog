@@ -104,21 +104,21 @@ function LiveWorkoutHeader({
   const { colors } = useAppTheme();
   const { t } = useTranslate();
 
-  const { completedSets, totalSets } = session.recordedExercises.reduce(
-    (acc, exercise) => {
-      if (exercise.type === 'RecordedWeightedExercise') {
-        acc.totalSets += exercise.potentialSets.length;
-        acc.completedSets += exercise.potentialSets.filter((set) => !!set.set)
-          .length;
-      } else {
-        acc.totalSets += exercise.sets.length;
-        acc.completedSets += exercise.sets.filter((set) => set.isCompletelyFilled)
-          .length;
+  let completedSets = 0;
+  let totalSets = 0;
+  for (const exercise of session.recordedExercises) {
+    if (exercise.type === 'RecordedWeightedExercise') {
+      totalSets += exercise.potentialSets.length;
+      for (const set of exercise.potentialSets) {
+        if (set.set) completedSets += 1;
       }
-      return acc;
-    },
-    { completedSets: 0, totalSets: 0 },
-  );
+    } else {
+      totalSets += exercise.sets.length;
+      for (const set of exercise.sets) {
+        if (set.isCompletelyFilled) completedSets += 1;
+      }
+    }
+  }
   const progress = totalSets === 0 ? 0 : completedSets / totalSets;
 
   return (
