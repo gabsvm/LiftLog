@@ -2,6 +2,7 @@ import CardActions from '@/components/presentation/foundation/card-actions';
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
+import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 import { GainsLabWordmark } from '@/components/presentation/foundation/gainslab-brand';
 import { Loader } from '@/components/presentation/foundation/loader';
 import {
@@ -59,12 +60,7 @@ function PlanSummary() {
             {plan.name}
           </Text>
         </View>
-        <Text
-          variant="titleLarge"
-          style={{ color: colors.primary, fontWeight: '700' }}
-        >
-          ›
-        </Text>
+        <Icon source="chevronRight" size={26} color={colors.primary} />
       </Card.Content>
     </Card>
   );
@@ -113,6 +109,7 @@ function ListUpcomingWorkouts({
             session={currentSession}
             actionLabel={t('workout.resume.button')}
             testID="resume-workout-button"
+            highlighted
             onAction={() => selectSession(currentSession)}
             onDelete={() => setConfirmDeleteSessionOpen(true)}
           />
@@ -151,17 +148,19 @@ function ListUpcomingWorkouts({
         {t('workout.freeform.title')}
       </Button>
 
-      <ConfirmationDialog
-        headline={t('workout.clear_current.confirm.title')}
-        textContent={t('workout.clear_current.confirm.body')}
-        okText={t('generic.clear.button')}
-        onOk={() => {
-          clearCurrentSession();
-          setConfirmDeleteSessionOpen(false);
-        }}
-        open={confirmDeleteSessionOpen}
-        onCancel={() => setConfirmDeleteSessionOpen(false)}
-      />
+      {confirmDeleteSessionOpen ? (
+        <ConfirmationDialog
+          headline={t('workout.clear_current.confirm.title')}
+          textContent={t('workout.clear_current.confirm.body')}
+          okText={t('generic.clear.button')}
+          onOk={() => {
+            clearCurrentSession();
+            setConfirmDeleteSessionOpen(false);
+          }}
+          open
+          onCancel={() => setConfirmDeleteSessionOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -172,12 +171,14 @@ function WorkoutCard({
   testID,
   onAction,
   onDelete,
+  highlighted = false,
 }: {
   session: Session;
   actionLabel: string;
   testID: string;
   onAction: () => void;
   onDelete?: () => void;
+  highlighted?: boolean;
 }) {
   const { colors } = useAppTheme();
   const { t } = useTranslate();
@@ -187,7 +188,14 @@ function WorkoutCard({
   return (
     <Card
       mode="contained"
-      style={[styles.workoutCard, { backgroundColor: colors.surfaceContainer }]}
+      style={[
+        styles.workoutCard,
+        {
+          backgroundColor: highlighted
+            ? colors.surfaceContainerHigh
+            : colors.surfaceContainer,
+        },
+      ]}
     >
       <Card.Content>
         <View style={styles.cardHeader}>
@@ -265,6 +273,7 @@ function WorkoutCard({
           <IconButton
             testID="clear-current-workout"
             icon="delete"
+            accessibilityLabel={t('workout.clear_current.confirm.title')}
             onPress={onDelete}
           />
         ) : null}
