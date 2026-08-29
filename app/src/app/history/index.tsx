@@ -7,6 +7,7 @@ import {
   SectionHeading,
 } from '@/components/presentation/foundation/screen-heading';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import HistoryCalendarCard from '@/components/presentation/summary/history-calendar-card';
 import LimitedHtml from '@/components/presentation/foundation/limited-html';
@@ -35,8 +36,7 @@ import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Card, Menu, Text } from 'react-native-paper';
-import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import { Card, Menu, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { SharedSession } from '@/models/feed-models';
@@ -160,9 +160,7 @@ export default function History() {
           subtitle={t('screen.history.subtitle')}
         />
         {historyLoading ? (
-          <View style={styles.loadingHistory}>
-            <ActivityIndicator />
-          </View>
+          <HistoryLoadingState />
         ) : (
           <>
             <HistoryCalendarCard
@@ -170,7 +168,6 @@ export default function History() {
               sessions={historySessions}
               onDateSelect={createSessionAtDate}
               onMonthChange={setCurrentYearMonth}
-              onDeleteSession={deleteWorkout}
               onSessionSelect={onSelectSession}
             />
             <SectionHeading
@@ -286,6 +283,31 @@ export default function History() {
   );
 }
 
+function HistoryLoadingState() {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ gap: spacing[4] }}>
+      <View
+        style={{
+          height: 292,
+          borderRadius: gainsLabRadii.card,
+          backgroundColor: colors.surfaceContainerLow,
+        }}
+      />
+      {[0, 1].map((index) => (
+        <View
+          key={index}
+          style={{
+            height: 128,
+            borderRadius: gainsLabRadii.card,
+            backgroundColor: colors.surfaceContainerLow,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 function HistorySessionActions({
   session,
   onRepeat,
@@ -304,14 +326,11 @@ function HistorySessionActions({
 
   return (
     <CardActions style={styles.historyActions}>
-      <Button
-        mode="contained-tonal"
+      <IconButton
         icon="playCircle"
         onPress={onRepeat}
-        style={{ flex: 1 }}
-      >
-        {t('workout.start_this.button')}
-      </Button>
+        accessibilityLabel={t('workout.start_this.button')}
+      />
       <Menu
         visible={menuVisible}
         onDismiss={() => setMenuVisible(false)}
@@ -319,7 +338,7 @@ function HistorySessionActions({
           <IconButton
             icon="moreHoriz"
             onPress={() => setMenuVisible(true)}
-            accessibilityLabel={session.blueprint.name}
+            accessibilityLabel={`${t('navigation.more')}: ${session.blueprint.name}`}
           />
         }
       >
@@ -371,11 +390,6 @@ function HistoryMoreCount({ count }: { count: number }) {
 }
 
 const styles = StyleSheet.create({
-  loadingHistory: {
-    minHeight: 320,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   exercisePreview: {
     gap: spacing[2],
     marginTop: spacing[4],
@@ -391,7 +405,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   historyActions: {
-    gap: spacing[2],
-    marginTop: spacing[2],
+    gap: spacing[1],
+    marginTop: spacing[1],
+    justifyContent: 'flex-end',
   },
 });
