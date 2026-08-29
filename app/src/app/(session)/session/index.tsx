@@ -77,6 +77,7 @@ export default function Index() {
         target="workoutSession"
         showBodyweight={showBodyweight}
         header={session ? <LiveWorkoutHeader session={session} /> : undefined}
+        finishWorkout={() => save()}
         openPostWorkoutSummary={() => {
           if (!session?.id) {
             return;
