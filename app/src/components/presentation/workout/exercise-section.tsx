@@ -52,7 +52,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
   const supersetConnectorAnchor = spacing[4] + spacing[2] + 14;
 
   const interactiveButtons = props.isReadonly ? (
-    <View style={{ height: 40 }} />
+    <View style={{ height: 48 }} />
   ) : (
     <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
       {props.showPreviousButton ? (
@@ -60,6 +60,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
           <IconButton
             testID="prev-exercise-btn"
             icon={'history'}
+            accessibilityLabel={t('workout.previously_completed.label')}
             onPress={() => setPreviousDialogOpen(true)}
           />
         </Tooltip>
@@ -72,6 +73,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
             testID="more-exercise-btn"
             onPress={() => setMenuVisible(true)}
             icon={'moreHoriz'}
+            accessibilityLabel={`${t('navigation.more')}: ${recordedExercise.blueprint.name}`}
           />
         }
       >
