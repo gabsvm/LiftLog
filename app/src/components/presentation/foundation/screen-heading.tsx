@@ -53,11 +53,17 @@ export function SectionHeading({
   return (
     <View style={styles.section}>
       <View style={styles.copy}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
+        <Text
+          variant="labelLarge"
+          style={[styles.sectionTitle, { color: colors.onSurfaceVariant }]}
+        >
           {title}
         </Text>
         {detail ? (
-          <Text variant="bodySmall" style={{ color: colors.onSurfaceVariant }}>
+          <Text
+            variant="bodySmall"
+            style={[styles.sectionDetail, { color: colors.onSurfaceVariant }]}
+          >
             {detail}
           </Text>
         ) : null}
@@ -73,16 +79,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: spacing[4],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[5],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[4],
   },
   copy: {
     flex: 1,
+    minWidth: 0,
   },
   eyebrow: {
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: '800',
-    letterSpacing: 1.5,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
     marginBottom: spacing[1],
   },
   title: {
@@ -98,10 +107,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing[3],
-    marginTop: spacing[2],
+    marginTop: spacing[3],
   },
   sectionTitle: {
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  sectionDetail: {
+    marginTop: spacing[0.5],
   },
 });
