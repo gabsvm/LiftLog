@@ -1,6 +1,6 @@
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
 import { Session } from '@/models/session-models';
-import { useAppSelector, useAppSelectorWithArg } from '@/store';
+import { useAppSelectorWithArg } from '@/store';
 import {
   selectCurrentSession,
   setCurrentSession,
@@ -18,25 +18,38 @@ export function CurrentWorkoutReplacer({
   session: Session | undefined;
   clearSession: () => void;
 }) {
-  const { t } = useTranslate();
-  const hasActiveSession = useAppSelector(
-    (x) => !!x.currentSession.workoutSession,
+  if (!session) {
+    return null;
+  }
+
+  return (
+    <ActiveWorkoutReplacer session={session} clearSession={clearSession} />
   );
+}
+
+function ActiveWorkoutReplacer({
+  session,
+  clearSession,
+}: {
+  session: Session;
+  clearSession: () => void;
+}) {
+  const { t } = useTranslate();
   const { push } = useRouter();
   const currentSession = useAppSelectorWithArg(
     selectCurrentSession,
     'workoutSession',
   );
   const hasCurrentSession = !!currentSession;
-  const activeSessionSameAsSelected = session?.equals(currentSession);
+  const activeSessionSameAsSelected = session.equals(currentSession);
   const dispatch = useDispatch();
   const replaceSession = useDebouncedCallback(
-    (session: Session) => {
+    (nextSession: Session) => {
       clearSession();
       dispatch(
         setCurrentSession({
           target: 'workoutSession',
-          session,
+          session: nextSession,
         }),
       );
       push('/(session)/session', { withAnchor: true });
@@ -44,21 +57,19 @@ export function CurrentWorkoutReplacer({
     500,
     { leading: true, trailing: false },
   );
-  const replaceSessionDialogAction = () => {
-    if (!session) return;
-    replaceSession(session);
-  };
+
   useEffect(() => {
-    if (session && (!hasCurrentSession || activeSessionSameAsSelected)) {
+    if (!hasCurrentSession || activeSessionSameAsSelected) {
       replaceSession(session);
     }
   }, [session, hasCurrentSession, replaceSession, activeSessionSameAsSelected]);
+
   return (
     <ConfirmationDialog
-      open={hasActiveSession && !!session && !activeSessionSameAsSelected}
+      open={hasCurrentSession && !activeSessionSameAsSelected}
       onCancel={clearSession}
       okText={t('generic.replace.button')}
-      onOk={replaceSessionDialogAction}
+      onOk={() => replaceSession(session)}
       headline={<T keyName="workout.replace_current.confirm.title" />}
       textContent={<T keyName="workout.replace_in_progress.confirm.body" />}
     />
