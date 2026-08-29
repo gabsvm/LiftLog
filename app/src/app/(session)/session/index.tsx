@@ -1,4 +1,5 @@
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
+import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 import SessionComponent from '@/components/smart/session-component';
 import SessionMoreMenuComponent from '@/components/smart/session-more-menu-component';
 import { useAppSelector, useAppSelectorWithArg } from '@/store';
@@ -67,7 +68,8 @@ export default function Index() {
       {keepAwake && <KeepAwake />}
       <Stack.Screen
         options={{
-          title: t('workout.workout.label'),
+          title: session?.blueprint.name ?? t('workout.workout.label'),
+          headerLargeTitleEnabled: false,
         }}
       />
       <SessionMoreMenuComponent target="workoutSession" save={save} />
@@ -84,14 +86,16 @@ export default function Index() {
           );
         }}
       />
-      <ConfirmationDialog
-        okText={t('generic.finish.button')}
-        onOk={() => save(true)}
-        onCancel={() => setConfirmOpen(false)}
-        textContent={t('workout.finish.incomplete.body')}
-        headline={t('workout.finish.confirm.title')}
-        open={confirmOpen}
-      />
+      {confirmOpen ? (
+        <ConfirmationDialog
+          okText={t('generic.finish.button')}
+          onOk={() => save(true)}
+          onCancel={() => setConfirmOpen(false)}
+          textContent={t('workout.finish.incomplete.body')}
+          headline={t('workout.finish.confirm.title')}
+          open
+        />
+      ) : null}
     </>
   );
 }
@@ -122,19 +126,26 @@ function LiveWorkoutHeader({
   const progress = totalSets === 0 ? 0 : completedSets / totalSets;
 
   return (
-    <View style={styles.liveHeader}>
-      <View style={styles.titleRow}>
-        <View style={{ flex: 1 }}>
+    <View
+      style={[
+        styles.liveHeader,
+        { borderBottomColor: colors.outlineVariant },
+      ]}
+    >
+      <View style={styles.statusRow}>
+        <View style={styles.liveStatus}>
+          <View style={[styles.liveDot, { backgroundColor: colors.primary }]} />
           <Text style={[styles.liveLabel, { color: colors.primary }]}>
             {t('workout.live.label')}
           </Text>
-          <Text variant="headlineMedium" style={styles.liveTitle}>
-            {session.blueprint.name}
-          </Text>
         </View>
         <Text
-          variant="titleMedium"
-          style={{ color: colors.primary, fontWeight: '800' }}
+          variant="labelLarge"
+          style={{
+            color: colors.onSurfaceVariant,
+            fontWeight: '800',
+            fontVariant: ['tabular-nums'],
+          }}
         >
           {completedSets}/{totalSets}
         </Text>
@@ -162,33 +173,42 @@ function LiveWorkoutHeader({
 const styles = StyleSheet.create({
   liveHeader: {
     paddingHorizontal: spacing.pageHorizontalMargin,
-    paddingTop: spacing[4],
+    paddingTop: spacing[2],
     paddingBottom: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  titleRow: {
+  statusRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing[4],
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+  },
+  liveStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: gainsLabRadii.pill,
   },
   liveLabel: {
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: '800',
     letterSpacing: 1.5,
-  },
-  liveTitle: {
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    marginTop: spacing[1],
+    textTransform: 'uppercase',
   },
   progressTrack: {
-    height: 5,
+    height: 3,
     overflow: 'hidden',
-    borderRadius: 99,
-    marginTop: spacing[3],
+    borderRadius: gainsLabRadii.pill,
+    marginTop: spacing[2],
   },
   progressFill: {
     height: '100%',
-    borderRadius: 99,
+    borderRadius: gainsLabRadii.pill,
   },
 });
 
