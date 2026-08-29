@@ -1,6 +1,7 @@
 import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { RecordedExercise } from '@/models/session-models';
 import { useAppSelector } from '@/store';
+import { useTranslate } from '@tolgee/react';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { Card, Divider, Icon, Text } from 'react-native-paper';
@@ -12,13 +13,14 @@ interface ExerciseNotesDisplayProps {
 
 export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
   const { colors } = useAppTheme();
+  const { t } = useTranslate();
   const expandByDefault = useAppSelector(
     (x) => x.settings.notesExpandedByDefault,
   );
   const notes = props.exercise.notes ?? '';
   const blueprintNotes = props.exercise.blueprint.notes ?? '';
   const previousNotes = props.previousExercise?.notes
-    ? 'Last time: ' + props.previousExercise.notes
+    ? `${t('generic.previous.button')}: ${props.previousExercise.notes}`
     : '';
   const templateOnly = !!blueprintNotes && !notes && !previousNotes;
   const [expanded, setExpanded] = useState(() =>
@@ -45,7 +47,7 @@ export default function ExerciseNotesDisplay(props: ExerciseNotesDisplayProps) {
     >
       <Card.Content
         style={{
-          minHeight: expanded ? undefined : 40,
+          minHeight: expanded ? undefined : 48,
           flexDirection: 'row',
           alignItems: expanded ? 'flex-start' : 'center',
           gap: expanded ? spacing[2] : spacing[1],
