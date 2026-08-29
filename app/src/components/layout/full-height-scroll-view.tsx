@@ -70,6 +70,7 @@ export default function FullHeightScrollView({
       )}
       {floatingChildren && (
         <View
+          pointerEvents="box-none"
           onLayout={(event) =>
             setFloatingBottomSize(event.nativeEvent.layout.height)
           }
