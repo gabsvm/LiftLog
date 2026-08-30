@@ -21,7 +21,7 @@ class WorkoutNotificationManager(private val context: Context) {
 
     fun createWorkoutNotificationBuilder(): NotificationCompat.Builder {
         return NotificationCompat.Builder(context, PERSISTENT_CHANNEL_ID)
-            .setContentTitle("LiftLog")
+            .setContentTitle("GainsLab")
             .setForegroundServiceBehavior(FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(context.getLaunchAppAtWorkoutPagePendingIntent())
             .setSmallIcon(R.drawable.fitness_center_24px)
