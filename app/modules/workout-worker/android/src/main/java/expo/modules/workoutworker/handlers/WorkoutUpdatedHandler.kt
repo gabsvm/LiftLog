@@ -127,6 +127,11 @@ class WorkoutUpdatedHandler(
         showPersistentRestState(Clock.System.now().epochSeconds)
 
         var previousProgress = getProgress()
+        if (fullProgressMax <= 0L || previousProgress >= fullProgressMax) {
+            timer.stop()
+            return
+        }
+
         timer.updateCallback {
             val progress = getProgress()
             val now = Clock.System.now().epochSeconds
