@@ -33,7 +33,7 @@ class WorkoutUpdatedHandler(
         return event.payload is WorkoutUpdatedEvent && event.appConfiguration.notificationsEnabled
     }
 
-    val timer = RepeatingTimerAction(MainScope(), {})
+    val timer = RepeatingTimerAction(MainScope(), {}, intervalMs = 1_000L)
 
     override suspend fun handle(
         event: WorkoutMessage,
@@ -88,37 +88,59 @@ class WorkoutUpdatedHandler(
         translations: Translations,
         workoutUpdatedEvent: WorkoutUpdatedEvent,
     ) {
+        val restTimerInfo = workoutUpdatedEvent.restTimerInfo ?: return
+        val timeStartSecs = restTimerInfo.startedAt.epochSeconds
+        val timePartiallyEndSecs = restTimerInfo.partiallyEndAt.epochSeconds
+        val timeEndSecs = restTimerInfo.endAt.epochSeconds
+        val partialProgressMax = timePartiallyEndSecs - timeStartSecs
+        val fullProgressMax = timeEndSecs - timeStartSecs
+        val currentExerciseMessage = getCurrentExerciseMessage(translations, workoutUpdatedEvent)
 
-        val restTimerInfo = workoutUpdatedEvent.restTimerInfo ?:return
-        fun getProgress(): Long {
-            val timeStartSecs = restTimerInfo.startedAt.epochSeconds
-            val now = Clock.System.now().epochSeconds
-            return now - timeStartSecs
+        fun getProgress(): Long = Clock.System.now().epochSeconds - timeStartSecs
+
+        fun getRestMessage(now: Long): String = when {
+            now < timePartiallyEndSecs -> translations.workoutPersistentNotificationRestBreakMessage
+            now in timePartiallyEndSecs..timeEndSecs -> translations.workoutPersistentNotificationStartSoonMessage
+            else -> translations.workoutPersistentNotificationStartNowMessage
         }
 
-        val currentExerciseMessage = getCurrentExerciseMessage(translations, workoutUpdatedEvent)
+        fun getContentText(now: Long): String {
+            val message = getRestMessage(now)
+            return if (currentExerciseMessage.isEmpty()) {
+                message
+            } else {
+                "$currentExerciseMessage\n$message"
+            }
+        }
+
+        fun showPersistentRestState(now: Long) {
+            val notifBuilder = notificationManager.createWorkoutNotificationBuilder()
+                .setContentText(getContentText(now))
+                // SystemUI owns the visible timer. This keeps the elapsed rest
+                // time moving even while the React Native app is backgrounded,
+                // without rebuilding the persistent notification every tick.
+                .setWhen(timeStartSecs * 1_000L)
+                .setUsesChronometer(true)
+            notificationManager.notifyPersistent(notifBuilder.build())
+        }
+
+        showPersistentRestState(Clock.System.now().epochSeconds)
+
         var previousProgress = getProgress()
         timer.updateCallback {
-            val timeStartSecs = restTimerInfo.startedAt.epochSeconds
-            val timePartiallyEndSecs = restTimerInfo.partiallyEndAt.epochSeconds
-            val timeEndSecs = restTimerInfo.endAt.epochSeconds
             val progress = getProgress()
             val now = Clock.System.now().epochSeconds
-            val partialProgressMax = timePartiallyEndSecs - timeStartSecs
-            val fullProgressMax = timeEndSecs - timeStartSecs
-
-            // max
-            val progressMax = if (now < timePartiallyEndSecs)
-                partialProgressMax else
-                fullProgressMax
-
+            val minimumCrossed =
+                partialProgressMax in (previousProgress + 1)..progress && partialProgressMax != 0L
+            val maximumCrossed =
+                fullProgressMax in (previousProgress + 1)..progress && fullProgressMax != 0L
 
             val restNotif: Notification? = when {
-                partialProgressMax in (previousProgress + 1)..progress && partialProgressMax != 0L -> notificationManager.createRestNotificationBuilder()
+                minimumCrossed -> notificationManager.createRestNotificationBuilder()
                     .setContentTitle(translations.workoutPersistentNotificationMinRestOverMessage)
                     .build()
 
-                fullProgressMax in (previousProgress + 1)..progress && fullProgressMax != 0L -> notificationManager.createRestNotificationBuilder()
+                maximumCrossed -> notificationManager.createRestNotificationBuilder()
                     .setContentTitle(translations.workoutPersistentNotificationMaxRestOverMessage)
                     .build()
 
@@ -132,36 +154,20 @@ class WorkoutUpdatedHandler(
                     notificationManager.clearRestNotification()
                 }
             }
-            @Suppress("AssignedValueIsNeverRead")
+
+            if (minimumCrossed || maximumCrossed) {
+                // The chronometer itself is updated by Android. We only rebuild
+                // when the semantic rest state changes.
+                showPersistentRestState(now)
+            }
+
             previousProgress = progress
 
-            val message = when {
-                now < timePartiallyEndSecs -> translations.workoutPersistentNotificationRestBreakMessage
-                now in timePartiallyEndSecs..timeEndSecs -> translations.workoutPersistentNotificationStartSoonMessage
-                else -> translations.workoutPersistentNotificationStartNowMessage
+            if (maximumCrossed) {
+                // The native chronometer keeps running after max rest, so there
+                // is no reason to keep a coroutine waking up once per second.
+                timer.stop()
             }
-            val contentText = when {
-                currentExerciseMessage == "" -> message
-                else -> "$currentExerciseMessage\n$message"
-            }
-            var notifBuilder =
-                notificationManager.createWorkoutNotificationBuilder()
-                    .setContentText(contentText).setSubText(
-                        "${formatDuration(progress.toDuration(SECONDS))}/${
-                            formatDuration(
-                                progressMax.toDuration(
-                                    SECONDS
-                                )
-                            )
-                        }"
-                    )
-            if (progress < progressMax) {
-                notifBuilder = notifBuilder.setProgress(
-                    progressMax.toInt(), progress.toInt(), false
-                )
-            }
-
-            notificationManager.notifyPersistent(notifBuilder.build())
         }
         timer.start()
     }
