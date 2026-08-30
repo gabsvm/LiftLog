@@ -208,7 +208,7 @@ function ActiveWorkoutCard({
       <Card.Content>
         <View style={styles.activeCardTopRow}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.microLabel, { color: colors.primary }]}> 
+            <Text style={[styles.microLabel, { color: colors.primary }]}>
               {t('workout.current.title')}
             </Text>
             <Text
