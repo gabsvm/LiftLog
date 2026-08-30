@@ -15,8 +15,27 @@ import { setRestNotifications } from '@/store/settings';
 import { Duration } from '@js-joda/core';
 import { T, useTranslate } from '@tolgee/react';
 import { Stack } from 'expo-router';
+import {
+  getPermissionsAsync,
+  requestPermissionsAsync,
+} from 'expo-notifications';
+import { Platform } from 'react-native';
 import { List } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
+
+async function canEnableRestNotifications() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 33) {
+    return true;
+  }
+
+  const existingPermission = await getPermissionsAsync();
+  if (existingPermission.granted) {
+    return true;
+  }
+
+  const requestedPermission = await requestPermissionsAsync();
+  return requestedPermission.granted;
+}
 
 export default function AppConfiguration() {
   const { t } = useTranslate();
@@ -36,28 +55,34 @@ export default function AppConfiguration() {
           supportingText={<T keyName="rest.notifications.subtitle" />}
           value={settings.restNotifications}
           onValueChange={(value) => {
-            dispatch(setRestNotifications(value));
-            if (currentWorkout) {
-              dispatch(
-                broadcastWorkoutEvent({
-                  type: value ? 'WorkoutStartedEvent' : 'WorkoutEndedEvent',
-                }),
-              );
-              dispatch(
-                broadcastWorkoutEvent({
-                  type: 'WorkoutUpdatedEvent',
-                  workout: currentWorkout.toJSON(),
-                  restTimerInfo: getTimerInfo(currentWorkout),
-                  cardioTimerInfo: getCardioTimerInfo(currentWorkout),
-                  currentExerciseDetails:
-                    getCurrentExerciseDetails(currentWorkout),
-                  totalWeightLifted: currentWorkout.totalWeightLifted.toJSON(),
-                  workoutDuration: toDurationJSON(
-                    currentWorkout.duration ?? Duration.ZERO,
-                  ),
-                }),
-              );
-            }
+            void (async () => {
+              if (value && !(await canEnableRestNotifications())) {
+                return;
+              }
+
+              dispatch(setRestNotifications(value));
+              if (currentWorkout) {
+                dispatch(
+                  broadcastWorkoutEvent({
+                    type: value ? 'WorkoutStartedEvent' : 'WorkoutEndedEvent',
+                  }),
+                );
+                dispatch(
+                  broadcastWorkoutEvent({
+                    type: 'WorkoutUpdatedEvent',
+                    workout: currentWorkout.toJSON(),
+                    restTimerInfo: getTimerInfo(currentWorkout),
+                    cardioTimerInfo: getCardioTimerInfo(currentWorkout),
+                    currentExerciseDetails:
+                      getCurrentExerciseDetails(currentWorkout),
+                    totalWeightLifted: currentWorkout.totalWeightLifted.toJSON(),
+                    workoutDuration: toDurationJSON(
+                      currentWorkout.duration ?? Duration.ZERO,
+                    ),
+                  }),
+                );
+              }
+            })();
           }}
         />
       </List.Section>
