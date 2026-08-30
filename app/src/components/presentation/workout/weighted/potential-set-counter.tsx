@@ -10,13 +10,12 @@ import {
 import { Text, View, type ViewStyle } from 'react-native';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
 import WeightDialog from '@/components/presentation/foundation/editors/weight-dialog';
-import { useAppTheme, spacing, font } from '@/hooks/useAppTheme';
+import { useAppTheme, spacing, font, rounding } from '@/hooks/useAppTheme';
 import FocusRing from '@/components/presentation/foundation/focus-ring';
 import { T } from '@tolgee/react';
 import { Weight } from '@/models/weight';
 import PotentialSetAdditionalActionsDialog from '@/components/presentation/workout/weighted/potential-sets-addition-actions-dialog';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
-import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 
 interface PotentialSetCounterProps {
   set: PotentialSet;
@@ -42,7 +41,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
   return (
     <FocusRing
       isSelected={props.toStartNext}
-      radius={gainsLabRadii.focus}
+      radius={rounding.roundedRectangleFocusRingRadius}
     >
       <View
         style={[
@@ -54,8 +53,8 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
       >
         <View
           style={{
-            borderTopLeftRadius: gainsLabRadii.control,
-            borderTopRightRadius: gainsLabRadii.control,
+            borderTopLeftRadius: rounding.roundedRectangleRadius,
+            borderTopRightRadius: rounding.roundedRectangleRadius,
             overflow: 'hidden',
           }}
         >
@@ -69,9 +68,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
               backgroundColor:
                 repCountValue !== undefined
                   ? colors.primary
-                  : props.toStartNext
-                    ? colors.surfaceContainerHighest
-                    : colors.surfaceContainerHigh,
+                  : colors.secondaryContainer,
             }}
             onPress={props.isReadonly ? undefined : props.onTap}
             onLongPress={
@@ -87,9 +84,8 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
                   color:
                     repCountValue !== undefined
                       ? colors.onPrimary
-                      : colors.onSurface,
+                      : colors.onSecondaryContainer,
                   ...font['text-xl'],
-                  fontVariant: ['tabular-nums'],
                 }}
               >
                 <Text style={{ fontWeight: 'bold' }}>
@@ -99,10 +95,6 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
                   style={{
                     ...font['text-sm'],
                     verticalAlign: 'top',
-                    color:
-                      repCountValue !== undefined
-                        ? colors.onPrimary
-                        : colors.onSurfaceVariant,
                   }}
                 >
                   /{props.maxReps}
@@ -120,12 +112,11 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
                     <Icon
                       source={'history'}
                       size={12}
-                      color={colors.onSurfaceVariant}
+                      color={colors.onSecondaryContainer + '99'}
                     />
                     <Text
                       style={{
-                        color: colors.onSurfaceVariant,
-                        fontVariant: ['tabular-nums'],
+                        color: colors.onSecondaryContainer + '99',
                       }}
                     >
                       {placeholderRepCount}
@@ -138,10 +129,10 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
         <View
           style={{
             borderTopWidth: 1,
-            borderColor: colors.outlineVariant,
+            borderColor: colors.outline,
             backgroundColor: colors.surfaceContainerHigh,
-            borderBottomLeftRadius: gainsLabRadii.control,
-            borderBottomRightRadius: gainsLabRadii.control,
+            borderBottomLeftRadius: rounding.roundedRectangleRadius,
+            borderBottomRightRadius: rounding.roundedRectangleRadius,
             overflow: 'hidden',
             padding: spacing[2],
             width: '100%',
@@ -164,13 +155,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
             }
             disabled={props.isReadonly}
           >
-            <Text
-              style={{
-                color: colors.onSurface,
-                ...font['text-sm'],
-                fontVariant: ['tabular-nums'],
-              }}
-            >
+            <Text style={{ color: colors.onSurface, ...font['text-sm'] }}>
               <WeightFormat weight={props.set.weight} />
             </Text>
           </PaperTouchableRipple>

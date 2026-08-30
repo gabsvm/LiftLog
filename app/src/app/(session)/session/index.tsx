@@ -2,7 +2,6 @@ import ConfirmationDialog from '@/components/presentation/foundation/confirmatio
 import { gainsLabRadii } from '@/components/presentation/foundation/gainslab-ui';
 import SessionComponent from '@/components/smart/session-component';
 import SessionMoreMenuComponent from '@/components/smart/session-more-menu-component';
-import { useHideTabBarWhileFocused } from '@/hooks/useTabBarVisibility';
 import { useAppSelector, useAppSelectorWithArg } from '@/store';
 import {
   finishCurrentWorkout,
@@ -18,7 +17,6 @@ import { StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
 export default function Index() {
-  useHideTabBarWhileFocused();
   const dispatch = useDispatch();
   const session = useAppSelectorWithArg(selectCurrentSession, 'workoutSession');
   const showPostWorkoutSummary = useAppSelector(
@@ -79,7 +77,6 @@ export default function Index() {
         target="workoutSession"
         showBodyweight={showBodyweight}
         header={session ? <LiveWorkoutHeader session={session} /> : undefined}
-        finishWorkout={() => save()}
         openPostWorkoutSummary={() => {
           if (!session?.id) {
             return;

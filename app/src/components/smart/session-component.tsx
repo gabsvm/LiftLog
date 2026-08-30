@@ -36,11 +36,6 @@ import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { CardioExercise } from '@/components/presentation/workout/cardio/cardio-exercise';
 import WeightFormat from '../presentation/foundation/weight-format';
 import { formatDuration } from '@/utils/format-date';
-import Button from '@/components/presentation/foundation/gesture-wrappers/button';
-import {
-  gainsLabRadii,
-  gainsLabTouchTarget,
-} from '@/components/presentation/foundation/gainslab-ui';
 
 const BODYWEIGHT_INCREMENT = new BigNumber('0.1');
 
@@ -57,7 +52,6 @@ export default function SessionComponent(props: {
   showBodyweight: boolean;
   header?: ReactNode;
   openPostWorkoutSummary?: () => void;
-  finishWorkout?: () => void;
 }) {
   const { colors } = useAppTheme();
   const useImperialUnits = useAppSelector((x) => x.settings.useImperialUnits);
@@ -165,15 +159,11 @@ export default function SessionComponent(props: {
       style={{
         marginVertical: spacing[2],
         marginHorizontal: spacing.pageHorizontalMargin,
-        borderRadius: gainsLabRadii.card,
-        backgroundColor: colors.surfaceContainerLow,
       }}
     >
       <Card.Content
         style={{
-          minHeight: sessionNotesExpanded
-            ? undefined
-            : gainsLabTouchTarget.minimum,
+          minHeight: sessionNotesExpanded ? undefined : 42,
           gap: spacing[2],
           flexDirection: 'row',
           alignItems: sessionNotesExpanded ? 'flex-start' : 'center',
@@ -220,11 +210,7 @@ export default function SessionComponent(props: {
 
   const bodyweight = props.showBodyweight ? (
     <Card
-      style={{
-        marginHorizontal: spacing.pageHorizontalMargin,
-        borderRadius: gainsLabRadii.card,
-        backgroundColor: colors.surfaceContainerLow,
-      }}
+      style={{ marginHorizontal: spacing.pageHorizontalMargin }}
       mode="contained"
       testID="bodyweight-card"
     >
@@ -271,33 +257,20 @@ export default function SessionComponent(props: {
     lastExercise instanceof RecordedWeightedExercise &&
     lastRecordedSet.set.repsCompleted < lastExercise.blueprint.repsPerSet;
   const restTimer = showRestTimer ? (
-    <RestTimer
-      rest={lastExercise.blueprint.restBetweenSets}
-      startTime={session.restTimerStartTime}
-      failed={!!lastSetFailed}
-      resetTimer={() => resetTimer(OffsetDateTime.now())}
-    />
+    <View style={{ flex: 1 }}>
+      <RestTimer
+        rest={lastExercise.blueprint.restBetweenSets}
+        startTime={session.restTimerStartTime}
+        failed={!!lastSetFailed}
+        resetTimer={() => resetTimer(OffsetDateTime.now())}
+      />
+    </View>
   ) : undefined;
-  const showFinishAction =
-    props.target === 'workoutSession' && session.isComplete && !!props.finishWorkout;
 
   const floatingBottomContainer = isReadonly ? null : (
     <FloatingBottomContainer
       additionalContent={
-        <View style={{ alignItems: 'center', gap: spacing[2] }}>
-          {restTimer}
-          {showFinishAction ? (
-            <Button
-              mode="contained"
-              icon="check"
-              contentStyle={{ minHeight: gainsLabTouchTarget.primaryAction }}
-              style={{ width: '100%' }}
-              onPress={props.finishWorkout}
-            >
-              {t('generic.finish.button')}
-            </Button>
-          ) : null}
-        </View>
+        <View style={{ alignItems: 'center' }}>{restTimer}</View>
       }
     />
   );
@@ -310,11 +283,7 @@ export default function SessionComponent(props: {
           ? props.openPostWorkoutSummary
           : undefined
       }
-      style={{
-        margin: spacing.pageHorizontalMargin,
-        borderRadius: gainsLabRadii.card,
-        backgroundColor: colors.surfaceContainerLow,
-      }}
+      style={{ margin: spacing.pageHorizontalMargin }}
     >
       <Card.Content>
         <View
@@ -329,7 +298,7 @@ export default function SessionComponent(props: {
           </Text>
           <WeightFormat
             fontWeight="bold"
-            color="onSurface"
+            color="primary"
             weight={session.totalWeightLifted}
           />
         </View>
@@ -345,11 +314,7 @@ export default function SessionComponent(props: {
           </Text>
           <Text
             variant="bodyMedium"
-            style={{
-              color: colors.onSurface,
-              fontWeight: 'bold',
-              fontVariant: ['tabular-nums'],
-            }}
+            style={{ color: colors.primary, fontWeight: 'bold' }}
           >
             {(session.duration &&
               formatDuration(session.duration, 'hours-mins')) ||
