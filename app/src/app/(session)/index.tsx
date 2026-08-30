@@ -18,6 +18,7 @@ import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { Session } from '@/models/session-models';
 import {
   useAppSelector,
+  useAppSelectorWithArg,
   useAppSelectorWhenFocusedWithArg,
 } from '@/store';
 import {
@@ -436,7 +437,12 @@ function HomeLoadingState() {
 
 export default function Index() {
   const upcomingSessions = useAppSelector((s) => s.program.upcomingSessions);
+  const currentWorkoutSession = useAppSelectorWithArg(
+    selectCurrentSession,
+    'workoutSession',
+  );
   const dispatch = useDispatch();
+  const { push } = useRouter();
   const currentBodyweight = upcomingSessions
     .map((x) => x.at(0)?.bodyweight)
     .unwrapOr(undefined);
@@ -454,13 +460,43 @@ export default function Index() {
     }, [dispatch]),
   );
 
-  const createFreeformSession = () => {
+  const startSession = useCallback(
+    (session: Session) => {
+      const hasCurrentSession = !!currentWorkoutSession;
+      const activeSessionSameAsSelected = session.equals(currentWorkoutSession);
+
+      if (hasCurrentSession && !activeSessionSameAsSelected) {
+        // Replacing an active workout is the only path that needs the
+        // intermediate confirmation component.
+        setSelectedSession(session);
+        return;
+      }
+
+      setSelectedSession(undefined);
+      if (!hasCurrentSession) {
+        dispatch(
+          setCurrentSession({
+            target: 'workoutSession',
+            session,
+          }),
+        );
+      }
+
+      // Normal Start and Resume navigate in the same press event. Previously
+      // they rendered CurrentWorkoutReplacer first and navigated from an
+      // effect on the next render, which produced a visible jump.
+      push('/(session)/session', { withAnchor: true });
+    },
+    [currentWorkoutSession, dispatch, push],
+  );
+
+  const createFreeformSession = useCallback(() => {
     const newSession = Session.freeformSession(
       LocalDate.now(),
       currentBodyweight,
     );
-    setSelectedSession(newSession);
-  };
+    startSession(newSession);
+  }, [currentBodyweight, startSession]);
 
   return (
     <FullHeightScrollView
@@ -479,7 +515,7 @@ export default function Index() {
         loading={() => <HomeLoadingState />}
         success={(upcoming) => (
           <ListUpcomingWorkouts
-            selectSession={setSelectedSession}
+            selectSession={startSession}
             upcoming={upcoming}
             createFreeformSession={createFreeformSession}
           />
