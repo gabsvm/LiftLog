@@ -41,6 +41,22 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
     (x) => !x.set,
   );
 
+  const commitExerciseUpdate = useCallback(
+    (
+      newExercise: RecordedWeightedExercise,
+      options?: { resetTimer?: boolean },
+    ) => {
+      // Keep the interaction snapshot ahead of React rendering. Rapid taps on
+      // multiple sets of the same exercise can arrive before the component
+      // receives the Redux update back through props; without this optimistic
+      // ref update, a later tap can be calculated from the older exercise and
+      // overwrite the previous completion.
+      recordedExerciseRef.current = newExercise;
+      updateExercise(newExercise, options);
+    },
+    [updateExercise],
+  );
+
   const handleTapSet = useCallback(
     (index: number) => {
       const exercise = recordedExerciseRef.current;
@@ -50,30 +66,29 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
       // Completing/uncompleting a set and resetting the rest timer must be
       // one session update. Two Redux updates here caused duplicate
       // persistence + worker broadcasts on every normal set tap.
-      updateExercise(newExercise, {
+      commitExerciseUpdate(newExercise, {
         resetTimer: !previousSet || !newSet,
       });
     },
-    [timeProvider, updateExercise],
+    [commitExerciseUpdate, timeProvider],
   );
 
   const handleUpdateReps = useCallback(
     (index: number, reps: number | undefined) => {
       const exercise = recordedExerciseRef.current;
-      updateExercise(exercise.withRepCount(index, reps, timeProvider()), {
+      commitExerciseUpdate(exercise.withRepCount(index, reps, timeProvider()), {
         resetTimer: true,
       });
     },
-    [timeProvider, updateExercise],
+    [commitExerciseUpdate, timeProvider],
   );
 
   const handleUpdateWeight = useCallback(
     (index: number, weight: Weight, applyTo: WeightAppliesTo) => {
-      updateExercise(
-        recordedExerciseRef.current.withWeight(index, weight, applyTo),
-      );
+      const exercise = recordedExerciseRef.current;
+      commitExerciseUpdate(exercise.withWeight(index, weight, applyTo));
     },
-    [updateExercise],
+    [commitExerciseUpdate],
   );
 
   return (
