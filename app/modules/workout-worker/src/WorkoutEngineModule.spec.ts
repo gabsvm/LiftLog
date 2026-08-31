@@ -1,14 +1,32 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   applyWorkoutEngineCommand,
+  parseWorkoutEngineCommand,
   parseWorkoutEngineSnapshot,
   serializeWorkoutEngineSnapshot,
   WorkoutEngineCommand,
   WorkoutEngineSnapshot,
+  WORKOUT_ENGINE_SCHEMA_VERSION,
 } from './WorkoutEngineModule';
 
-const initialSnapshot: WorkoutEngineSnapshot = {
-  schemaVersion: 1,
+type ParityFixture = {
+  initial: WorkoutEngineSnapshot;
+  commands: WorkoutEngineCommand[];
+  expected: WorkoutEngineSnapshot;
+};
+
+function loadParityFixture(): ParityFixture {
+  return JSON.parse(
+    readFileSync(
+      new URL('../fixtures/workout-engine-parity-v2.json', import.meta.url),
+      'utf8',
+    ),
+  ) as ParityFixture;
+}
+
+const baseSnapshot: WorkoutEngineSnapshot = {
+  schemaVersion: 2,
   sessionId: 'session-1',
   revision: 0,
   status: 'active',
@@ -23,24 +41,48 @@ const initialSnapshot: WorkoutEngineSnapshot = {
           setIndex: 0,
           completed: false,
           reps: null,
+          completionDateTime: null,
           weight: 80,
           weightUnit: 'kilograms',
+          durationSeconds: null,
+          distanceValue: null,
+          distanceUnit: null,
+          resistance: null,
+          incline: null,
+          steps: null,
+          currentBlockStartTime: null,
         },
         {
           setIndex: 1,
           completed: false,
           reps: null,
+          completionDateTime: null,
           weight: 80,
           weightUnit: 'kilograms',
+          durationSeconds: null,
+          distanceValue: null,
+          distanceUnit: null,
+          resistance: null,
+          incline: null,
+          steps: null,
+          currentBlockStartTime: null,
+        },
+        {
+          setIndex: 2,
+          completed: true,
+          reps: 7,
+          completionDateTime: '2026-08-31T14:59:00-03:00',
+          weight: 80,
+          weightUnit: 'kilograms',
+          durationSeconds: null,
+          distanceValue: null,
+          distanceUnit: null,
+          resistance: null,
+          incline: null,
+          steps: null,
+          currentBlockStartTime: null,
         },
       ],
-    },
-    {
-      exerciseIndex: 1,
-      type: 'cardio',
-      repsPerSet: null,
-      supersetWithNext: false,
-      sets: [{ setIndex: 0, completed: false, reps: null, weight: null, weightUnit: null }],
     },
   ],
   restTimerEndTime: null,
@@ -58,140 +100,189 @@ function command(
   payload: WorkoutEngineCommandPayload,
   revision = 1,
 ): WorkoutEngineCommand {
-  const common = { schemaVersion: 1 as const, sessionId: 'session-1', revision };
-  switch (payload.type) {
-    case 'toggle-set':
-      return { ...common, ...payload };
-    case 'update-reps':
-      return { ...common, ...payload };
-    case 'update-weight':
-      return { ...common, ...payload };
-    case 'start-rest':
-      return { ...common, ...payload };
-    case 'reset-rest':
-      return { ...common, ...payload };
-    case 'finish':
-      return { ...common, ...payload };
-  }
+  return {
+    schemaVersion: WORKOUT_ENGINE_SCHEMA_VERSION,
+    sessionId: 'session-1',
+    revision,
+    ...payload,
+  } as WorkoutEngineCommand;
 }
 
-describe('WorkoutEngine contract', () => {
-  it('round trips a versioned snapshot without changing its shape', () => {
-    const parsed = parseWorkoutEngineSnapshot(
-      JSON.parse(serializeWorkoutEngineSnapshot(initialSnapshot)),
+describe('WorkoutEngine contract v2', () => {
+  it('applies the shared parity fixture exactly', () => {
+    const fixture = loadParityFixture();
+    const result = fixture.commands.reduce(
+      (snapshot, nextCommand) =>
+        applyWorkoutEngineCommand(snapshot, parseWorkoutEngineCommand(nextCommand)),
+      parseWorkoutEngineSnapshot(fixture.initial),
     );
 
-    expect(parsed).toEqual(initialSnapshot);
+    expect(result).toEqual(parseWorkoutEngineSnapshot(fixture.expected));
   });
 
-  it('cycles a weighted set exactly like the existing rep counter', () => {
+  it('round trips weighted timestamps and cardio fields without changing shape', () => {
+    const fixture = loadParityFixture();
+    const parsed = parseWorkoutEngineSnapshot(
+      JSON.parse(serializeWorkoutEngineSnapshot(fixture.initial)),
+    );
+
+    expect(parsed).toEqual(fixture.initial);
+    expect(parsed.exercises[1]?.sets[0]).toMatchObject({
+      durationSeconds: 300,
+      distanceValue: 1.25,
+      distanceUnit: 'kilometre',
+      resistance: 5,
+      incline: 3,
+      steps: 600,
+      completionDateTime: '2026-08-31T14:55:00-03:00',
+    });
+  });
+
+  it('records completion time only when a weighted set becomes completed', () => {
     const completed = applyWorkoutEngineCommand(
-      initialSnapshot,
-      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }),
+      baseSnapshot,
+      command({
+        type: 'toggle-set',
+        exerciseIndex: 0,
+        setIndex: 0,
+        completionDateTime: '2026-08-31T15:00:00-03:00',
+      }),
     );
     const decremented = applyWorkoutEngineCommand(
       completed,
-      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }, 2),
-    );
-    const cleared = applyWorkoutEngineCommand(
-      {
-        ...decremented,
-        exercises: decremented.exercises.map((exercise, exerciseIndex) =>
-          exerciseIndex === 0
-            ? {
-                ...exercise,
-                sets: exercise.sets.map((set, setIndex) =>
-                  exerciseIndex === 0 && setIndex === 0
-                    ? { ...set, reps: 0, completed: true }
-                    : set,
-                ),
-              }
-            : exercise,
-        ),
-      },
-      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }, 3),
-    );
-
-    expect(completed.revision).toBe(1);
-    expect(completed.exercises[0]?.sets[0]).toMatchObject({ completed: true, reps: 8 });
-    expect(decremented.exercises[0]?.sets[0]).toMatchObject({ completed: true, reps: 7 });
-    expect(cleared.exercises[0]?.sets[0]).toMatchObject({ completed: false, reps: null });
-  });
-
-  it('treats an already-applied revision as an idempotent retry', () => {
-    const applied = applyWorkoutEngineCommand(
-      initialSnapshot,
-      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }),
-    );
-
-    const retried = applyWorkoutEngineCommand(
-      applied,
-      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }),
-    );
-
-    expect(retried).toEqual(applied);
-  });
-
-  it('rejects a revision gap and a command for another session', () => {
-    expect(() =>
-      applyWorkoutEngineCommand(
-        initialSnapshot,
-        command({ type: 'finish' }, 2),
-      ),
-    ).toThrow('revision_gap');
-
-    expect(() =>
-      applyWorkoutEngineCommand(initialSnapshot, {
-        ...command({ type: 'finish' }),
-        sessionId: 'other-session',
-      }),
-    ).toThrow('session_mismatch');
-  });
-
-  it('updates reps and weight without changing superset or cardio metadata', () => {
-    const withReps = applyWorkoutEngineCommand(
-      initialSnapshot,
-      command({ type: 'update-reps', exerciseIndex: 0, setIndex: 0, reps: 9 }),
-    );
-    const withWeight = applyWorkoutEngineCommand(
-      withReps,
       command(
         {
-          type: 'update-weight',
+          type: 'toggle-set',
           exerciseIndex: 0,
           setIndex: 0,
-          weight: 82.5,
-          weightUnit: 'kilograms',
+          completionDateTime: '2026-08-31T15:01:00-03:00',
         },
         2,
       ),
     );
 
-    expect(withWeight.exercises[0]?.sets[0]).toMatchObject({
+    expect(completed.exercises[0]?.sets[0]).toMatchObject({
       completed: true,
-      reps: 9,
-      weight: 82.5,
+      reps: 8,
+      completionDateTime: '2026-08-31T15:00:00-03:00',
     });
-    expect(withWeight.exercises[0]?.supersetWithNext).toBe(true);
-    expect(withWeight.exercises[1]?.type).toBe('cardio');
+    expect(decremented.exercises[0]?.sets[0]).toMatchObject({
+      completed: true,
+      reps: 7,
+      completionDateTime: '2026-08-31T15:00:00-03:00',
+    });
   });
 
-  it('starts and resets the supplied rest timer, then finishes the session', () => {
-    const started = applyWorkoutEngineCommand(
-      initialSnapshot,
-      command({ type: 'start-rest', endTime: 123456 }),
-    );
-    const reset = applyWorkoutEngineCommand(
-      started,
-      command({ type: 'reset-rest' }, 2),
-    );
-    const finished = applyWorkoutEngineCommand(
-      reset,
-      command({ type: 'finish' }, 3),
+  it('clears reps and completion time together', () => {
+    const cleared = applyWorkoutEngineCommand(
+      baseSnapshot,
+      command({
+        type: 'update-reps',
+        exerciseIndex: 0,
+        setIndex: 2,
+        reps: null,
+        completionDateTime: null,
+      }),
     );
 
-    expect(started.restTimerEndTime).toBe(123456);
-    expect(reset.restTimerEndTime).toBeNull();
-    expect(finished.status).toBe('finished');
+    expect(cleared.exercises[0]?.sets[2]).toMatchObject({
+      completed: false,
+      reps: null,
+      completionDateTime: null,
+    });
+  });
+
+  it('matches WeightAppliesTo semantics for thisSet, uncompletedSets and allSets', () => {
+    const thisSet = applyWorkoutEngineCommand(
+      baseSnapshot,
+      command({
+        type: 'update-weight',
+        exerciseIndex: 0,
+        setIndex: 0,
+        weight: 81,
+        weightUnit: 'kilograms',
+        applyTo: 'thisSet',
+      }),
+    );
+    expect(thisSet.exercises[0]?.sets.map((set) => set.weight)).toEqual([
+      81,
+      80,
+      80,
+    ]);
+
+    const uncompleted = applyWorkoutEngineCommand(
+      baseSnapshot,
+      command({
+        type: 'update-weight',
+        exerciseIndex: 0,
+        setIndex: 0,
+        weight: 82,
+        weightUnit: 'kilograms',
+        applyTo: 'uncompletedSets',
+      }),
+    );
+    expect(uncompleted.exercises[0]?.sets.map((set) => set.weight)).toEqual([
+      82,
+      82,
+      80,
+    ]);
+
+    const all = applyWorkoutEngineCommand(
+      baseSnapshot,
+      command({
+        type: 'update-weight',
+        exerciseIndex: 0,
+        setIndex: 0,
+        weight: 83,
+        weightUnit: 'kilograms',
+        applyTo: 'allSets',
+      }),
+    );
+    expect(all.exercises[0]?.sets.map((set) => set.weight)).toEqual([
+      83,
+      83,
+      83,
+    ]);
+  });
+
+  it('treats an already-applied revision as an idempotent retry', () => {
+    const firstCommand = command({
+      type: 'toggle-set',
+      exerciseIndex: 0,
+      setIndex: 0,
+      completionDateTime: '2026-08-31T15:00:00-03:00',
+    });
+    const applied = applyWorkoutEngineCommand(baseSnapshot, firstCommand);
+
+    expect(applyWorkoutEngineCommand(applied, firstCommand)).toEqual(applied);
+  });
+
+  it('rejects revision gaps, session mismatches and weighted commands targeting cardio', () => {
+    expect(() =>
+      applyWorkoutEngineCommand(baseSnapshot, command({ type: 'finish' }, 2)),
+    ).toThrow('revision_gap');
+
+    expect(() =>
+      applyWorkoutEngineCommand(baseSnapshot, {
+        ...command({ type: 'finish' }),
+        sessionId: 'other-session',
+      }),
+    ).toThrow('session_mismatch');
+
+    const fixture = loadParityFixture();
+    expect(() =>
+      applyWorkoutEngineCommand(
+        fixture.initial,
+        {
+          schemaVersion: 2,
+          sessionId: fixture.initial.sessionId,
+          revision: 1,
+          type: 'toggle-set',
+          exerciseIndex: 1,
+          setIndex: 0,
+          completionDateTime: '2026-08-31T15:00:00-03:00',
+        },
+      ),
+    ).toThrow('invalid_target');
   });
 });
