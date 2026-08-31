@@ -1,6 +1,5 @@
 package expo.modules.workoutworker.handlers
 
-
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.util.Log
@@ -15,7 +14,9 @@ import com.limajuice.liftlog.WeightUnit
 import com.limajuice.liftlog.WorkoutMessage
 import com.limajuice.liftlog.WorkoutUpdatedEvent
 import expo.modules.workoutworker.utils.RepeatingTimerAction
+import expo.modules.workoutworker.utils.RestTimerClock
 import expo.modules.workoutworker.utils.WorkoutNotificationManager
+import expo.modules.workoutworker.utils.WorkoutWorkerScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -24,8 +25,6 @@ import kotlin.time.Duration
 import kotlin.time.DurationUnit.SECONDS
 import kotlin.time.ExperimentalTime
 import kotlin.time.toDuration
-import expo.modules.workoutworker.utils.WorkoutWorkerScope
-
 
 class WorkoutUpdatedHandler(
     private val notificationManager: WorkoutNotificationManager,
@@ -52,7 +51,6 @@ class WorkoutUpdatedHandler(
                     event.translations,
                     workoutUpdatedEvent
                 )
-
                 else -> showFinishedNotification(event.translations, workoutUpdatedEvent)
             }
         } catch (e: Exception) {
@@ -61,7 +59,6 @@ class WorkoutUpdatedHandler(
     }
 
     private fun showFinishedNotification(translations: Translations, event: WorkoutUpdatedEvent) {
-        // We should not be in a timer anymore
         timer.stop()
 
         val messageTemplate: String =
@@ -78,7 +75,6 @@ class WorkoutUpdatedHandler(
     }
 
     private fun showCurrentExerciseNotification(translations: Translations, event: WorkoutUpdatedEvent) {
-        // We should not be in a timer anymore
         timer.stop()
 
         val notifBuilder = notificationManager.createWorkoutNotificationBuilder()
@@ -99,7 +95,10 @@ class WorkoutUpdatedHandler(
         val fullProgressMax = timeEndSecs - timeStartSecs
         val currentExerciseMessage = getCurrentExerciseMessage(translations, workoutUpdatedEvent)
 
-        fun getProgress(): Long = Clock.System.now().epochSeconds - timeStartSecs
+        // Recover once from wall clock, then use elapsedRealtime for the active
+        // timer. Manual/NTP clock corrections can no longer jump a rest that is
+        // already running in the foreground service.
+        val restClock = RestTimerClock(timeStartSecs)
 
         fun getRestMessage(now: Long): String = when {
             now < timePartiallyEndSecs -> translations.workoutPersistentNotificationRestBreakMessage
@@ -119,25 +118,24 @@ class WorkoutUpdatedHandler(
         fun showPersistentRestState(now: Long) {
             val notifBuilder = notificationManager.createWorkoutNotificationBuilder()
                 .setContentText(getContentText(now))
-                // SystemUI owns the visible timer. This keeps the elapsed rest
-                // time moving even while the React Native app is backgrounded,
-                // without rebuilding the persistent notification every tick.
+                // SystemUI owns the visible timer. The wall timestamp is only
+                // the presentation/recovery anchor; progression is monotonic.
                 .setWhen(timeStartSecs * 1_000L)
                 .setUsesChronometer(true)
             notificationManager.notifyPersistent(notifBuilder.build())
         }
 
-        showPersistentRestState(Clock.System.now().epochSeconds)
+        showPersistentRestState(restClock.currentEpochSeconds())
 
-        var previousProgress = getProgress()
+        var previousProgress = restClock.progressSeconds()
         if (fullProgressMax <= 0L || previousProgress >= fullProgressMax) {
             timer.stop()
             return
         }
 
         timer.updateCallback {
-            val progress = getProgress()
-            val now = Clock.System.now().epochSeconds
+            val progress = restClock.progressSeconds()
+            val now = restClock.currentEpochSeconds()
             val minimumCrossed =
                 partialProgressMax in (previousProgress + 1)..progress && partialProgressMax != 0L
             val maximumCrossed =
@@ -147,11 +145,9 @@ class WorkoutUpdatedHandler(
                 minimumCrossed -> notificationManager.createRestNotificationBuilder()
                     .setContentTitle(translations.workoutPersistentNotificationMinRestOverMessage)
                     .build()
-
                 maximumCrossed -> notificationManager.createRestNotificationBuilder()
                     .setContentTitle(translations.workoutPersistentNotificationMaxRestOverMessage)
                     .build()
-
                 else -> null
             }
             if (restNotif != null) {
@@ -164,31 +160,28 @@ class WorkoutUpdatedHandler(
             }
 
             if (minimumCrossed || maximumCrossed) {
-                // The chronometer itself is updated by Android. We only rebuild
-                // when the semantic rest state changes.
                 showPersistentRestState(now)
             }
 
             previousProgress = progress
 
             if (maximumCrossed) {
-                // The native chronometer keeps running after max rest, so there
-                // is no reason to keep a coroutine waking up once per second.
+                // SystemUI keeps the chronometer moving after max rest, so the
+                // service does not need a permanent one-second polling loop.
                 timer.stop()
             }
         }
         timer.start()
     }
 
-
     @OptIn(ExperimentalTime::class)
     private fun showCardioTimerNotification(
         translations: Translations,
         workoutUpdatedEvent: WorkoutUpdatedEvent,
     ) {
-        val cardioTimerInfo = workoutUpdatedEvent.cardioTimerInfo?:return
+        val cardioTimerInfo = workoutUpdatedEvent.cardioTimerInfo ?: return
         val currentExerciseMessage = getCurrentExerciseMessage(translations, workoutUpdatedEvent)
-        if(cardioTimerInfo.currentBlockStartTime == null){
+        if (cardioTimerInfo.currentBlockStartTime == null) {
             return
         }
         timer.updateCallback {
@@ -219,16 +212,14 @@ class WorkoutUpdatedHandler(
     }
 
     private fun getCurrentExerciseMessage(translations: Translations, event: WorkoutUpdatedEvent): String {
-
-        val currentExercise =
-            event.currentExerciseDetails?.exercise
+        val currentExercise = event.currentExerciseDetails?.exercise
         val messageTemplate = translations.workoutPersistentNotificationCurrentExerciseMessage
 
         val nextSet =
             (event.currentExerciseDetails?.exercise as? RecordedWeightedExercise?)?.potentialSets?.firstOrNull { it.set == null }
 
         fun getCardioTarget(): String {
-            var set: RecordedCardioExerciseSet
+            val set: RecordedCardioExerciseSet
             if (event.cardioTimerInfo != null) {
                 val exerciseIndex = event.cardioTimerInfo.exerciseIndex
                 val setIndex = event.cardioTimerInfo.setIndex
@@ -237,16 +228,15 @@ class WorkoutUpdatedHandler(
                         ?: return ""
                 set = exercise.sets[setIndex.toInt()]
             } else {
-                val currentExercise = event.currentExerciseDetails?:return ""
-                val setIndex = currentExercise.setIndex
+                val currentExerciseDetails = event.currentExerciseDetails ?: return ""
+                val setIndex = currentExerciseDetails.setIndex
                 val exercise =
-                    currentExercise.exercise as? RecordedCardioExercise?
+                    currentExerciseDetails.exercise as? RecordedCardioExercise?
                         ?: return ""
                 set = exercise.sets[setIndex.toInt()]
             }
             return when (val cardioTarget = set.blueprint.target) {
                 is TimeCardioTarget -> formatDuration(cardioTarget.value)
-
                 is DistanceCardioTarget -> "${cardioTarget.value.value} ${cardioTarget.value.unit}"
                 else -> ""
             }
@@ -259,11 +249,9 @@ class WorkoutUpdatedHandler(
                     if (nextSet?.weight != null) "x${formatWeight(nextSet.weight)}" else ""
                 }"
             )
-
-            currentExercise is RecordedCardioExercise-> messageTemplate.replace(
+            currentExercise is RecordedCardioExercise -> messageTemplate.replace(
                 "\$EXERCISE_DESCRIPTOR$", "${currentExercise.blueprint.name} - ${getCardioTarget()}"
             )
-
             else -> ""
         }
     }
