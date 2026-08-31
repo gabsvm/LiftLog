@@ -27,12 +27,13 @@ function exerciseFixture(): RecordedWeightedExercise {
 }
 
 describe('weighted set tap router', () => {
-  it('routes the tap only to native when a native writer is present', () => {
+  it('routes the tap only to native and returns its reconciled exercise snapshot', () => {
     const exercise = exerciseFixture();
-    const nativeCycle = vi.fn();
+    const nativeExercise = exercise.withCycledRepCount(0, TIME);
+    const nativeCycle = vi.fn(() => nativeExercise);
     const commitExerciseUpdate = vi.fn();
 
-    routeWeightedSetTap({
+    const interactionExercise = routeWeightedSetTap({
       index: 0,
       exercise,
       time: TIME,
@@ -43,13 +44,14 @@ describe('weighted set tap router', () => {
     expect(nativeCycle).toHaveBeenCalledTimes(1);
     expect(nativeCycle).toHaveBeenCalledWith(0, TIME);
     expect(commitExerciseUpdate).not.toHaveBeenCalled();
+    expect(interactionExercise).toBe(nativeExercise);
   });
 
-  it('preserves the existing RN writer when no native writer is supplied', () => {
+  it('preserves the existing RN writer and returns its optimistic snapshot', () => {
     const exercise = exerciseFixture();
     const commitExerciseUpdate = vi.fn();
 
-    routeWeightedSetTap({
+    const interactionExercise = routeWeightedSetTap({
       index: 0,
       exercise,
       time: TIME,
@@ -63,5 +65,6 @@ describe('weighted set tap router', () => {
       true,
     );
     expect(options).toEqual({ resetTimer: true });
+    expect(interactionExercise).toBe(updatedExercise);
   });
 });
