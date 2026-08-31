@@ -4,7 +4,7 @@ import { RecordedWeightedExercise } from '@/models/session-models';
 export type NativeWeightedSetCycle = (
   setIndex: number,
   time: OffsetDateTime,
-) => void;
+) => RecordedWeightedExercise | undefined;
 
 type CommitExerciseUpdate = (
   exercise: RecordedWeightedExercise,
@@ -22,8 +22,8 @@ type RouteWeightedSetTapParams = {
 /**
  * Keeps the hot tap path single-writer. When the native experiment is wired,
  * React Native does not also mutate the exercise locally; the reconciled
- * Session will come back through the parent callback. With no native writer,
- * the proven low-latency RN path remains byte-for-byte equivalent in behavior.
+ * Session comes back through the parent callback and is returned only so the
+ * component can keep its interaction ref ahead of React rendering.
  */
 export function routeWeightedSetTap({
   index,
@@ -31,10 +31,9 @@ export function routeWeightedSetTap({
   time,
   nativeCycle,
   commitExerciseUpdate,
-}: RouteWeightedSetTapParams): void {
+}: RouteWeightedSetTapParams): RecordedWeightedExercise | undefined {
   if (nativeCycle) {
-    nativeCycle(index, time);
-    return;
+    return nativeCycle(index, time);
   }
 
   const previousSet = exercise.getSet(index).set;
@@ -43,4 +42,5 @@ export function routeWeightedSetTap({
   commitExerciseUpdate(newExercise, {
     resetTimer: !previousSet || !newSet,
   });
+  return newExercise;
 }
