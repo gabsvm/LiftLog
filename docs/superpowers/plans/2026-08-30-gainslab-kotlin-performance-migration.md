@@ -280,6 +280,13 @@ Los archivos nuevos se crean sólo en la fase que los necesita. No se deben gene
 
 **Acceptance:** startup más rápido o la fase se rechaza sin tocar migraciones ni datos.
 
+### Phase 5 gate result (2026-08-31)
+
+- La fase queda rechazada para implementación en esta iteración. `CurrentSessionStateV1` todavía puede contener protobuf histórico o JSON V3 que debe pasar por las migraciones TypeScript existentes; el módulo nativo no tiene un parser compatible ni acceso al contrato de `Paths.document` del `KeyValueStore`.
+- No se agregó un lector paralelo ni un sidecar: hacerlo podría saltarse migraciones, duplicar el formato persistido o crear una segunda autoridad de estado.
+- Se conserva el bootstrap TypeScript actual: shell temprano, hidratación real, `initializationError`, Retry, diagnóstico y timeout recuperable.
+- El dispositivo estuvo conectado al iniciar la medición, pero perdió conexión antes de completar las corridas; no se declara mejora de startup ni se habilita una bandera nativa.
+
 ## Phase 6: Native workout screen, only after engine parity
 
 ### Task 6.1: Build the Android session shell
