@@ -1,5 +1,7 @@
 package expo.modules.workoutworker.engine
 
+import java.time.OffsetDateTime
+
 data class WorkoutViewSetState(
     val setIndex: Int,
     val completed: Boolean,
@@ -36,9 +38,7 @@ data class WorkoutViewState(
                 exercise.sets.count { it.completed }
             }
             val totalSets = snapshot.exercises.sumOf { it.sets.size }
-            val currentExerciseIndex = snapshot.exercises
-                .indexOfFirst { exercise -> exercise.sets.any { !it.completed } }
-                .let { if (it >= 0) it else snapshot.exercises.lastIndex }
+            val currentExerciseIndex = findCurrentExerciseIndex(snapshot.exercises)
             val supersetLabels = buildSupersetLabels(snapshot.exercises)
 
             return WorkoutViewState(
@@ -69,6 +69,101 @@ data class WorkoutViewState(
                 },
             )
         }
+
+        /**
+         * Mirrors Session.nextExercise from the React Native domain model.
+         * Native rendering must not accidentally force sequential completion:
+         * after A1 it advances to A2, and after A2 it loops back to the first
+         * incomplete member of the superset chain.
+         */
+        private fun findCurrentExerciseIndex(
+            exercises: List<WorkoutEngineExerciseSnapshot>,
+        ): Int {
+            val runningCardioIndex = exercises.indexOfFirst { exercise ->
+                exercise.type == "cardio" &&
+                    exercise.sets.any { it.currentBlockStartTime != null }
+            }
+            if (runningCardioIndex >= 0) return runningCardioIndex
+
+            var latestExerciseIndex = -1
+            var latestExerciseTime: Long? = null
+            exercises.forEachIndexed { index, exercise ->
+                if (!isStarted(exercise)) return@forEachIndexed
+                val latestTime = latestEpochSecond(exercise)
+                if (
+                    latestExerciseIndex == -1 ||
+                    (latestTime != null &&
+                        (latestExerciseTime == null || latestTime > latestExerciseTime!!))
+                ) {
+                    latestExerciseIndex = index
+                    latestExerciseTime = latestTime
+                }
+            }
+
+            val latestSupersetsWithNext =
+                latestExerciseIndex >= 0 &&
+                    latestExerciseIndex < exercises.lastIndex &&
+                    exercises[latestExerciseIndex].type == "weighted" &&
+                    exercises[latestExerciseIndex].supersetWithNext
+
+            val latestSupersetsWithPrevious =
+                latestExerciseIndex > 0 &&
+                    exercises[latestExerciseIndex - 1].type == "weighted" &&
+                    exercises[latestExerciseIndex - 1].supersetWithNext
+
+            if (
+                latestSupersetsWithNext &&
+                !isComplete(exercises[latestExerciseIndex + 1])
+            ) {
+                return latestExerciseIndex + 1
+            }
+
+            if (latestSupersetsWithPrevious) {
+                var indexToJumpBackTo = latestExerciseIndex - 1
+                while (
+                    indexToJumpBackTo >= 0 &&
+                    exercises[indexToJumpBackTo].type == "weighted" &&
+                    exercises[indexToJumpBackTo].supersetWithNext
+                ) {
+                    indexToJumpBackTo--
+                }
+                indexToJumpBackTo++
+                while (
+                    indexToJumpBackTo < exercises.size &&
+                    isComplete(exercises[indexToJumpBackTo])
+                ) {
+                    indexToJumpBackTo++
+                }
+                if (indexToJumpBackTo < exercises.size) {
+                    return indexToJumpBackTo
+                }
+            }
+
+            var result = -1
+            var maxEpochSecond = Long.MIN_VALUE
+            exercises.forEachIndexed { index, exercise ->
+                if (isComplete(exercise)) return@forEachIndexed
+                val epochSecond = latestEpochSecond(exercise) ?: Long.MIN_VALUE
+                if (result == -1 || epochSecond > maxEpochSecond) {
+                    result = index
+                    maxEpochSecond = epochSecond
+                }
+            }
+            return result
+        }
+
+        private fun isComplete(exercise: WorkoutEngineExerciseSnapshot): Boolean =
+            exercise.sets.all { it.completed }
+
+        private fun isStarted(exercise: WorkoutEngineExerciseSnapshot): Boolean =
+            exercise.sets.any { it.completionDateTime != null }
+
+        private fun latestEpochSecond(exercise: WorkoutEngineExerciseSnapshot): Long? =
+            exercise.sets
+                .mapNotNull { set ->
+                    set.completionDateTime?.let { OffsetDateTime.parse(it).toEpochSecond() }
+                }
+                .maxOrNull()
 
         private fun buildSupersetLabels(
             exercises: List<WorkoutEngineExerciseSnapshot>,
