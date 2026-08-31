@@ -50,6 +50,8 @@ export type WorkoutEngineSnapshot = {
   revision: number;
   status: 'active' | 'finished';
   exercises: WorkoutEngineExerciseSnapshot[];
+  /** Persistible Session timestamp; the end time remains a derived projection. */
+  restTimerStartTime: string | null;
   /** Epoch seconds, matching the existing worker/event contract. */
   restTimerEndTime: number | null;
   error: WorkoutEngineError | null;
@@ -85,6 +87,7 @@ export type WorkoutEngineCommand =
     })
   | (WorkoutEngineCommandBase & {
       type: 'start-rest';
+      startTime: string;
       endTime: number;
     })
   | (WorkoutEngineCommandBase & { type: 'reset-rest' })
@@ -264,12 +267,17 @@ export function parseWorkoutEngineSnapshot(
     value.restTimerEndTime === null
       ? null
       : requireFiniteNumber(value.restTimerEndTime, 'restTimerEndTime');
+  const restTimerStartTime =
+    value.restTimerStartTime === null
+      ? null
+      : requireString(value.restTimerStartTime, 'restTimerStartTime');
   return {
     schemaVersion: WORKOUT_ENGINE_SCHEMA_VERSION,
     sessionId: requireString(value.sessionId, 'sessionId'),
     revision,
     status: value.status,
     exercises: value.exercises.map(parseExercise),
+    restTimerStartTime,
     restTimerEndTime,
     error: parseError(value.error),
   };
@@ -289,15 +297,22 @@ function parseCommandIndex(value: number, field: string): number {
 function getWeightedExercise(
   snapshot: WorkoutEngineSnapshot,
   exerciseIndex: number,
-): WorkoutEngineExerciseSnapshot {
+): WorkoutEngineExerciseSnapshot & { type: 'weighted'; repsPerSet: number } {
   const exercise = snapshot.exercises[exerciseIndex];
-  if (!exercise || exercise.type !== 'weighted' || exercise.repsPerSet === null) {
+  if (!exercise || exercise.type !== 'weighted') {
     throw new WorkoutEngineCommandError(
       'invalid_target',
       `weighted exercise ${exerciseIndex} does not exist`,
     );
   }
-  return exercise;
+  const repsPerSet = exercise.repsPerSet;
+  if (repsPerSet === null) {
+    throw new WorkoutEngineCommandError(
+      'invalid_target',
+      `weighted exercise ${exerciseIndex} does not have repsPerSet`,
+    );
+  }
+  return { ...exercise, type: 'weighted', repsPerSet };
 }
 
 function getWeightedSet(
@@ -461,15 +476,22 @@ export function applyWorkoutEngineCommand(
       case 'start-rest':
         return {
           ...current,
+          restTimerStartTime: parsedCommand.startTime,
           restTimerEndTime: parsedCommand.endTime,
           error: null,
         };
       case 'reset-rest':
-        return { ...current, restTimerEndTime: null, error: null };
+        return {
+          ...current,
+          restTimerStartTime: null,
+          restTimerEndTime: null,
+          error: null,
+        };
       case 'finish':
         return {
           ...current,
           status: 'finished',
+          restTimerStartTime: null,
           restTimerEndTime: null,
           error: null,
         };
@@ -600,7 +622,8 @@ export function parseWorkoutEngineCommand(value: unknown): WorkoutEngineCommand 
     case 'start-rest': {
       const endTime = requireFiniteNumber(value.endTime, 'endTime', 'invalid_command');
       if (endTime <= 0) commandError('endTime must be positive');
-      return { ...common, type: value.type, endTime };
+      const startTime = requireString(value.startTime, 'startTime', 'invalid_command');
+      return { ...common, type: value.type, startTime, endTime };
     }
     case 'reset-rest':
     case 'finish':

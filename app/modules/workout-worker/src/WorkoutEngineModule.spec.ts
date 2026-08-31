@@ -18,10 +18,7 @@ type ParityFixture = {
 
 function loadParityFixture(): ParityFixture {
   return JSON.parse(
-    readFileSync(
-      new URL('../fixtures/workout-engine-parity-v2.json', import.meta.url),
-      'utf8',
-    ),
+    readFileSync('modules/workout-worker/fixtures/workout-engine-parity-v2.json', 'utf8'),
   ) as ParityFixture;
 }
 
@@ -85,6 +82,7 @@ const baseSnapshot: WorkoutEngineSnapshot = {
       ],
     },
   ],
+  restTimerStartTime: null,
   restTimerEndTime: null,
   error: null,
 };
@@ -105,7 +103,7 @@ function command(
     sessionId: 'session-1',
     revision,
     ...payload,
-  } as WorkoutEngineCommand;
+  };
 }
 
 describe('WorkoutEngine contract v2', () => {

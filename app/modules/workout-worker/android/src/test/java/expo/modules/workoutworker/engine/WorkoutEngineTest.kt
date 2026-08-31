@@ -75,6 +75,7 @@ class WorkoutEngineTest {
         weightUnit: String? = null,
         applyTo: String? = null,
         endTime: Double? = null,
+        startTime: String? = null,
         sessionId: String = "session-1",
     ) = WorkoutEngineCommand(
         schemaVersion = 2,
@@ -89,6 +90,7 @@ class WorkoutEngineTest {
         weightUnit = weightUnit,
         applyTo = applyTo,
         endTime = endTime,
+        startTime = startTime,
     )
 
     @Test
@@ -211,13 +213,19 @@ class WorkoutEngineTest {
     fun `timer and finish remain revisioned commands`() {
         val withTimer = WorkoutEngine.apply(
             snapshot(),
-            command("start-rest", endTime = 123456.0),
+            command(
+                "start-rest",
+                endTime = 123456.0,
+                startTime = "2026-08-31T15:03:00-03:00",
+            ),
         )
         val reset = WorkoutEngine.apply(withTimer, command("reset-rest", revision = 2))
         val finished = WorkoutEngine.apply(reset, command("finish", revision = 3))
 
         assertEquals(123456.0, withTimer.restTimerEndTime!!, 0.0)
+        assertEquals("2026-08-31T15:03:00-03:00", withTimer.restTimerStartTime)
         assertNull(reset.restTimerEndTime)
+        assertNull(reset.restTimerStartTime)
         assertEquals("finished", finished.status)
         assertTrue(finished.exercises[0].supersetWithNext)
     }
@@ -230,7 +238,7 @@ class WorkoutEngineTest {
     }
 
     private fun findFixtureFile(): File {
-        var current: File? = File(System.getProperty("user.dir")).absoluteFile
+        var current: File? = File(System.getProperty("user.dir") ?: ".").absoluteFile
         repeat(10) {
             val directory = current ?: return@repeat
             val direct = File(directory, "fixtures/workout-engine-parity-v2.json")

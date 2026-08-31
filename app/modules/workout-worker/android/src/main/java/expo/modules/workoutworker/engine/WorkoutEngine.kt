@@ -1,10 +1,12 @@
 package expo.modules.workoutworker.engine
 
+import androidx.annotation.Keep
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.adapter
 import expo.modules.workoutworker.utils.Json
 
 @JsonClass(generateAdapter = false)
+@Keep
 data class WorkoutEngineSetSnapshot(
     val setIndex: Int,
     val completed: Boolean,
@@ -22,6 +24,7 @@ data class WorkoutEngineSetSnapshot(
 )
 
 @JsonClass(generateAdapter = false)
+@Keep
 data class WorkoutEngineExerciseSnapshot(
     val exerciseIndex: Int,
     val type: String,
@@ -31,23 +34,27 @@ data class WorkoutEngineExerciseSnapshot(
 )
 
 @JsonClass(generateAdapter = false)
+@Keep
 data class WorkoutEngineError(
     val code: String,
     val message: String,
 )
 
 @JsonClass(generateAdapter = false)
+@Keep
 data class WorkoutEngineSnapshot(
     val schemaVersion: Int,
     val sessionId: String,
     val revision: Long,
     val status: String,
     val exercises: List<WorkoutEngineExerciseSnapshot>,
+    val restTimerStartTime: String? = null,
     val restTimerEndTime: Double?,
     val error: WorkoutEngineError?,
 )
 
 @JsonClass(generateAdapter = false)
+@Keep
 data class WorkoutEngineCommand(
     val schemaVersion: Int,
     val sessionId: String,
@@ -59,6 +66,7 @@ data class WorkoutEngineCommand(
     val weight: Double? = null,
     val weightUnit: String? = null,
     val endTime: Double? = null,
+    val startTime: String? = null,
     val completionDateTime: String? = null,
     val applyTo: String? = null,
 )
@@ -189,9 +197,22 @@ object WorkoutEngine {
                 )
             }
 
-            "start-rest" -> snapshot.copy(restTimerEndTime = command.endTime, error = null)
-            "reset-rest" -> snapshot.copy(restTimerEndTime = null, error = null)
-            "finish" -> snapshot.copy(status = "finished", restTimerEndTime = null, error = null)
+            "start-rest" -> snapshot.copy(
+                restTimerStartTime = command.startTime,
+                restTimerEndTime = command.endTime,
+                error = null,
+            )
+            "reset-rest" -> snapshot.copy(
+                restTimerStartTime = null,
+                restTimerEndTime = null,
+                error = null,
+            )
+            "finish" -> snapshot.copy(
+                status = "finished",
+                restTimerStartTime = null,
+                restTimerEndTime = null,
+                error = null,
+            )
             else -> invalidCommand("unsupported command type: ${command.type}")
         }
         return next.copy(revision = command.revision, error = null)
@@ -349,8 +370,13 @@ object WorkoutEngine {
                     invalidCommand("applyTo must be thisSet, uncompletedSets or allSets")
                 }
             }
-            "start-rest" -> if (command.endTime == null || !command.endTime.isFinite() || command.endTime <= 0) {
-                invalidCommand("endTime must be a positive finite number")
+            "start-rest" -> {
+                if (command.endTime == null || !command.endTime.isFinite() || command.endTime <= 0) {
+                    invalidCommand("endTime must be a positive finite number")
+                }
+                if (command.startTime.isNullOrBlank()) {
+                    invalidCommand("startTime must not be blank")
+                }
             }
             "reset-rest", "finish" -> Unit
             else -> invalidCommand("unsupported command type: ${command.type}")

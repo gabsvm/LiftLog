@@ -2,7 +2,7 @@ diff --git a/node_modules/react-native-worklets/android/fix-prefab.gradle b/node
 index fcf502a..3fdfb99 100644
 --- a/node_modules/react-native-worklets/android/fix-prefab.gradle
 +++ b/node_modules/react-native-worklets/android/fix-prefab.gradle
-@@ -30,7 +30,12 @@ afterEvaluate {
+@@ -30,7 +30,11 @@ afterEvaluate {
              return
          }
  

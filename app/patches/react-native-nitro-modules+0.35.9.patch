@@ -2,7 +2,7 @@ diff --git a/node_modules/react-native-nitro-modules/android/fix-prefab.gradle b
 index d6c010e..dc88d5c 100644
 --- a/node_modules/react-native-nitro-modules/android/fix-prefab.gradle
 +++ b/node_modules/react-native-nitro-modules/android/fix-prefab.gradle
-@@ -28,7 +28,12 @@ afterEvaluate {
+@@ -28,7 +28,11 @@ afterEvaluate {
        return
      }
  

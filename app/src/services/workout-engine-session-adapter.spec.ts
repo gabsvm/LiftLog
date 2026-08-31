@@ -95,13 +95,13 @@ describe('workout engine session adapter', () => {
     expect(snapshot.exercises[0]?.sets[0]).toMatchObject({
       completed: true,
       reps: 8,
-      completionDateTime: '2026-08-31T15:00:00-03:00',
+      completionDateTime: '2026-08-31T15:00-03:00',
       weight: 80,
       weightUnit: 'kilograms',
     });
     expect(snapshot.exercises[1]?.sets[0]).toMatchObject({
       completed: true,
-      completionDateTime: '2026-08-31T15:10:00-03:00',
+      completionDateTime: '2026-08-31T15:10-03:00',
       durationSeconds: 300,
       distanceValue: 1.25,
       distanceUnit: 'kilometre',
@@ -163,12 +163,14 @@ describe('workout engine session adapter', () => {
       ...sessionToWorkoutEngineSnapshot(original, 0),
       revision: 1,
       status: 'finished' as const,
+      restTimerStartTime: null,
+      restTimerEndTime: null,
     };
 
     const result = applyWorkoutEngineSnapshotToSession(original, snapshot);
 
     expect(result.shouldFinish).toBe(true);
-    expect(result.session.restTimerStartTime).toBe(original.restTimerStartTime);
+    expect(result.session.restTimerStartTime).toBeUndefined();
   });
 
   it('rejects snapshots from another session or a different exercise shape', () => {

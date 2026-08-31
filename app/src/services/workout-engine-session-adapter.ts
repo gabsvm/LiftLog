@@ -116,6 +116,7 @@ export function sessionToWorkoutEngineSnapshot(
     // finish flow remains authoritative until the native path owns persistence.
     status: 'active',
     exercises,
+    restTimerStartTime: session.restTimerStartTime?.toString() ?? null,
     restTimerEndTime: session.restTimerEndTime?.toEpochSecond() ?? null,
     error: null,
   });
@@ -278,7 +279,12 @@ export function applyWorkoutEngineSnapshotToSession(
   );
 
   return {
-    session: session.with({ recordedExercises }),
+    session: session.with({
+      recordedExercises,
+      restTimerStartTime: snapshot.restTimerStartTime
+        ? parseDateTime(snapshot.restTimerStartTime, 'restTimerStartTime')
+        : undefined,
+    }),
     shouldFinish: snapshot.status === 'finished',
     revision: snapshot.revision,
   };

@@ -46,11 +46,9 @@ export function validateWorkoutEngineRoundTrip(
  * side effects: React Native remains the only writer until the device parity
  * gate explicitly enables a native session owner.
  *
- * Rest commands are intentionally blocked here for now. The isolated engine
- * carries a derived restTimerEndTime, while the Session domain persists
- * restTimerStartTime and derives the end from workout prescription. Allowing
- * start/reset through this bridge before the contract transports the start
- * timestamp would make the round trip lossy and create two timer authorities.
+ * Rest commands carry the persistible start timestamp and the derived end
+ * projection. This keeps the bridge reversible without copying prescription
+ * logic into the engine or creating a second timer authority.
  */
 export function executeWorkoutEngineCommandDryRun(
   session: Session,
@@ -66,12 +64,6 @@ export function executeWorkoutEngineCommandDryRun(
       `next revision must be ${revision + 1}, received ${command.revision}`,
     );
   }
-  if (command.type === 'start-rest' || command.type === 'reset-rest') {
-    throw new Error(
-      'rest timer commands are not bridge-safe until restTimerStartTime is part of the reversible contract',
-    );
-  }
-
   const snapshot = sessionToWorkoutEngineSnapshot(session, revision);
   const nativeSnapshot = executor(snapshot, command);
   if (nativeSnapshot.revision !== command.revision) {

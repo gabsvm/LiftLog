@@ -82,6 +82,7 @@
         ]
       }
     ],
+    "restTimerStartTime": null,
     "restTimerEndTime": null,
     "error": null
   },
@@ -141,6 +142,7 @@
       "sessionId": "session-parity",
       "revision": 6,
       "type": "start-rest",
+      "startTime": "2026-08-31T15:03:00-03:00",
       "endTime": 1788203100
     }
   ],
@@ -227,6 +229,7 @@
         ]
       }
     ],
+    "restTimerStartTime": "2026-08-31T15:03:00-03:00",
     "restTimerEndTime": 1788203100,
     "error": null
   }

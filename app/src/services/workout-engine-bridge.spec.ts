@@ -124,36 +124,43 @@ describe('workout engine dry-run bridge', () => {
     expect(result.revision).toBe(1);
   });
 
-  it('blocks rest commands until the contract can round trip Session restTimerStartTime', () => {
+  it('round trips start-rest without losing Session restTimerStartTime', () => {
     const session = sessionFixture();
 
-    expect(() =>
-      executeWorkoutEngineCommandDryRun(
-        session,
-        0,
-        {
-          schemaVersion: 2,
-          sessionId: session.id,
-          revision: 1,
-          type: 'start-rest',
-          endTime: 123456,
-        },
-        applyWorkoutEngineCommand,
-      ),
-    ).toThrow('rest timer commands are not bridge-safe');
+    const result = executeWorkoutEngineCommandDryRun(
+      session,
+      0,
+      {
+        schemaVersion: 2,
+        sessionId: session.id,
+        revision: 1,
+        type: 'start-rest',
+        startTime: '2026-08-31T15:00:00-03:00',
+        endTime: 123456,
+      },
+      applyWorkoutEngineCommand,
+    );
 
-    expect(() =>
-      executeWorkoutEngineCommandDryRun(
-        session,
-        0,
-        {
-          schemaVersion: 2,
-          sessionId: session.id,
-          revision: 1,
-          type: 'reset-rest',
-        },
-        applyWorkoutEngineCommand,
-      ),
-    ).toThrow('rest timer commands are not bridge-safe');
+    expect(result.session.restTimerStartTime?.toString()).toBe(
+      '2026-08-31T15:00-03:00',
+    );
+    expect(result.revision).toBe(1);
+  });
+
+  it('clears restTimerStartTime when reset-rest is applied', () => {
+    const session = sessionFixture();
+    const result = executeWorkoutEngineCommandDryRun(
+      session,
+      0,
+      {
+        schemaVersion: 2,
+        sessionId: session.id,
+        revision: 1,
+        type: 'reset-rest',
+      },
+      applyWorkoutEngineCommand,
+    );
+
+    expect(result.session.restTimerStartTime).toBeUndefined();
   });
 });
