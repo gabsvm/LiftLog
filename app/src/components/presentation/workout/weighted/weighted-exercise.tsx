@@ -64,13 +64,19 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
 
   const handleTapSet = useCallback(
     (index: number) => {
-      routeWeightedSetTap({
+      const interactionExercise = routeWeightedSetTap({
         index,
         exercise: recordedExerciseRef.current,
         time: timeProvider(),
         nativeCycle: nativeCycleSet,
         commitExerciseUpdate,
       });
+      if (interactionExercise) {
+        // Native taps still keep the local interaction snapshot current. This
+        // preserves the rapid-tap protection if the next interaction arrives
+        // before React renders the reconciled Redux Session.
+        recordedExerciseRef.current = interactionExercise;
+      }
     },
     [commitExerciseUpdate, nativeCycleSet, timeProvider],
   );
