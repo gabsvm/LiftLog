@@ -11,6 +11,14 @@ data class WorkoutEngineSetSnapshot(
     val reps: Int?,
     val weight: Double?,
     val weightUnit: String?,
+    val completionDateTime: String? = null,
+    val durationSeconds: Double? = null,
+    val distanceValue: Double? = null,
+    val distanceUnit: String? = null,
+    val resistance: Double? = null,
+    val incline: Double? = null,
+    val steps: Int? = null,
+    val currentBlockStartTime: String? = null,
 )
 
 @JsonClass(generateAdapter = false)
@@ -45,12 +53,14 @@ data class WorkoutEngineCommand(
     val sessionId: String,
     val revision: Long,
     val type: String,
-    val exerciseIndex: Int?,
-    val setIndex: Int?,
-    val reps: Int?,
-    val weight: Double?,
-    val weightUnit: String?,
-    val endTime: Double?,
+    val exerciseIndex: Int? = null,
+    val setIndex: Int? = null,
+    val reps: Int? = null,
+    val weight: Double? = null,
+    val weightUnit: String? = null,
+    val endTime: Double? = null,
+    val completionDateTime: String? = null,
+    val applyTo: String? = null,
 )
 
 class WorkoutEngineException(
@@ -59,7 +69,7 @@ class WorkoutEngineException(
 ) : IllegalArgumentException("$code: $message")
 
 object WorkoutEngine {
-    private const val SCHEMA_VERSION = 1
+    private const val SCHEMA_VERSION = 2
 
     @OptIn(ExperimentalStdlibApi::class)
     fun decodeSnapshot(json: String): WorkoutEngineSnapshot =
@@ -123,65 +133,118 @@ object WorkoutEngine {
         }
 
         val next = when (command.type) {
-            "toggle-set" -> updateSet(snapshot, command) { set ->
-                val exercise = snapshot.exercises[command.exerciseIndex!!]
-                if (exercise.type == "weighted" && exercise.repsPerSet != null) {
+            "toggle-set" -> {
+                val exercise = weightedExercise(snapshot, command)
+                updateWeightedSet(snapshot, command) { set ->
                     when {
-                        !set.completed -> set.copy(completed = true, reps = exercise.repsPerSet)
-                        set.reps == 0 -> set.copy(completed = false, reps = null)
+                        !set.completed -> set.copy(
+                            completed = true,
+                            reps = exercise.repsPerSet,
+                            completionDateTime = command.completionDateTime,
+                        )
+                        set.reps == 0 -> set.copy(
+                            completed = false,
+                            reps = null,
+                            completionDateTime = null,
+                        )
                         else -> set.copy(
                             completed = true,
-                            reps = (set.reps ?: exercise.repsPerSet) - 1,
+                            reps = maxOf(0, (set.reps ?: exercise.repsPerSet!!) - 1),
                         )
                     }
-                } else {
-                    set.copy(completed = !set.completed)
                 }
             }
 
-            "update-reps" -> updateSet(snapshot, command) { set ->
-                set.copy(completed = true, reps = command.reps)
+            "update-reps" -> updateWeightedSet(snapshot, command) { set ->
+                if (command.reps == null) {
+                    set.copy(
+                        completed = false,
+                        reps = null,
+                        completionDateTime = null,
+                    )
+                } else {
+                    set.copy(
+                        completed = true,
+                        reps = command.reps,
+                        completionDateTime = command.completionDateTime,
+                    )
+                }
             }
 
-            "update-weight" -> updateSet(snapshot, command) { set ->
-                set.copy(weight = command.weight, weightUnit = command.weightUnit)
+            "update-weight" -> updateWeightedExercise(snapshot, command) { exercise ->
+                exercise.copy(
+                    sets = exercise.sets.mapIndexed { index, set ->
+                        val applies = when (command.applyTo) {
+                            "allSets" -> true
+                            "thisSet" -> index == command.setIndex
+                            "uncompletedSets" -> !set.completed
+                            else -> false
+                        }
+                        if (applies) {
+                            set.copy(weight = command.weight, weightUnit = command.weightUnit)
+                        } else {
+                            set
+                        }
+                    },
+                )
             }
 
             "start-rest" -> snapshot.copy(restTimerEndTime = command.endTime, error = null)
             "reset-rest" -> snapshot.copy(restTimerEndTime = null, error = null)
             "finish" -> snapshot.copy(status = "finished", restTimerEndTime = null, error = null)
-            else -> throw WorkoutEngineException(
-                "invalid_command",
-                "unsupported command type: ${command.type}",
-            )
+            else -> invalidCommand("unsupported command type: ${command.type}")
         }
         return next.copy(revision = command.revision, error = null)
     }
 
-    private fun updateSet(
+    private fun weightedExercise(
+        snapshot: WorkoutEngineSnapshot,
+        command: WorkoutEngineCommand,
+    ): WorkoutEngineExerciseSnapshot {
+        val exerciseIndex = command.exerciseIndex
+            ?: invalidCommand("exerciseIndex is required")
+        val exercise = snapshot.exercises.getOrNull(exerciseIndex)
+            ?: invalidTarget("weighted exercise $exerciseIndex does not exist")
+        if (exercise.type != "weighted" || exercise.repsPerSet == null) {
+            invalidTarget("weighted exercise $exerciseIndex does not exist")
+        }
+        return exercise
+    }
+
+    private fun updateWeightedSet(
         snapshot: WorkoutEngineSnapshot,
         command: WorkoutEngineCommand,
         update: (WorkoutEngineSetSnapshot) -> WorkoutEngineSetSnapshot,
     ): WorkoutEngineSnapshot {
-        val exerciseIndex = command.exerciseIndex ?: invalidCommand("exerciseIndex is required")
+        val exercise = weightedExercise(snapshot, command)
         val setIndex = command.setIndex ?: invalidCommand("setIndex is required")
-        val exercise = snapshot.exercises.getOrNull(exerciseIndex)
-            ?: invalidTarget("set $exerciseIndex:$setIndex does not exist")
+        if (exercise.sets.getOrNull(setIndex) == null) {
+            invalidTarget("set ${command.exerciseIndex}:$setIndex does not exist")
+        }
+        return updateWeightedExercise(snapshot, command) { currentExercise ->
+            currentExercise.copy(
+                sets = currentExercise.sets.mapIndexed { currentSetIndex, currentSet ->
+                    if (currentSetIndex == setIndex) update(currentSet) else currentSet
+                },
+            )
+        }
+    }
+
+    private fun updateWeightedExercise(
+        snapshot: WorkoutEngineSnapshot,
+        command: WorkoutEngineCommand,
+        update: (WorkoutEngineExerciseSnapshot) -> WorkoutEngineExerciseSnapshot,
+    ): WorkoutEngineSnapshot {
+        val exerciseIndex = command.exerciseIndex ?: invalidCommand("exerciseIndex is required")
+        val exercise = weightedExercise(snapshot, command)
+        val setIndex = command.setIndex ?: invalidCommand("setIndex is required")
         if (exercise.sets.getOrNull(setIndex) == null) {
             invalidTarget("set $exerciseIndex:$setIndex does not exist")
         }
         return snapshot.copy(
             error = null,
             exercises = snapshot.exercises.mapIndexed { currentExerciseIndex, currentExercise ->
-                if (currentExerciseIndex != exerciseIndex) {
-                    currentExercise
-                } else {
-                    currentExercise.copy(
-                        sets = currentExercise.sets.mapIndexed { currentSetIndex, currentSet ->
-                            if (currentSetIndex == setIndex) update(currentSet) else currentSet
-                        },
-                    )
-                }
+                if (currentExerciseIndex == exerciseIndex) update(currentExercise) else currentExercise
             },
         )
     }
@@ -206,6 +269,9 @@ object WorkoutEngine {
             if (exercise.type != "weighted" && exercise.type != "cardio") {
                 throw WorkoutEngineException("invalid_snapshot", "unsupported exercise type")
             }
+            if (exercise.type == "weighted" && exercise.repsPerSet == null) {
+                throw WorkoutEngineException("invalid_snapshot", "weighted exercise requires repsPerSet")
+            }
             if (exercise.repsPerSet != null && exercise.repsPerSet < 0) {
                 throw WorkoutEngineException("invalid_snapshot", "repsPerSet must not be negative")
             }
@@ -216,17 +282,27 @@ object WorkoutEngine {
                 if (set.reps != null && set.reps < 0) {
                     throw WorkoutEngineException("invalid_snapshot", "reps must not be negative")
                 }
-                if (set.weight != null && !set.weight.isFinite()) {
-                    throw WorkoutEngineException("invalid_snapshot", "weight must be finite")
+                validateFinite(set.weight, "weight")
+                validateFinite(set.durationSeconds, "durationSeconds")
+                validateFinite(set.distanceValue, "distanceValue")
+                validateFinite(set.resistance, "resistance")
+                validateFinite(set.incline, "incline")
+                if (set.steps != null && set.steps < 0) {
+                    throw WorkoutEngineException("invalid_snapshot", "steps must not be negative")
                 }
-                if (set.weightUnit != null && set.weightUnit.isBlank()) {
-                    throw WorkoutEngineException("invalid_snapshot", "weightUnit must not be blank")
+                listOf(
+                    "weightUnit" to set.weightUnit,
+                    "completionDateTime" to set.completionDateTime,
+                    "distanceUnit" to set.distanceUnit,
+                    "currentBlockStartTime" to set.currentBlockStartTime,
+                ).forEach { (field, value) ->
+                    if (value != null && value.isBlank()) {
+                        throw WorkoutEngineException("invalid_snapshot", "$field must not be blank")
+                    }
                 }
             }
         }
-        if (snapshot.restTimerEndTime != null && !snapshot.restTimerEndTime.isFinite()) {
-            throw WorkoutEngineException("invalid_snapshot", "restTimerEndTime must be finite")
-        }
+        validateFinite(snapshot.restTimerEndTime, "restTimerEndTime")
         if (snapshot.error != null && (snapshot.error.code.isBlank() || snapshot.error.message.isBlank())) {
             throw WorkoutEngineException("invalid_snapshot", "error fields must not be blank")
         }
@@ -234,46 +310,43 @@ object WorkoutEngine {
 
     private fun validateCommand(command: WorkoutEngineCommand) {
         if (command.schemaVersion != SCHEMA_VERSION) {
-            throw WorkoutEngineException("invalid_command", "unsupported schemaVersion")
+            invalidCommand("unsupported schemaVersion")
         }
         if (command.sessionId.isBlank()) {
-            throw WorkoutEngineException("invalid_command", "sessionId must not be blank")
+            invalidCommand("sessionId must not be blank")
         }
         if (command.revision < 0) {
-            throw WorkoutEngineException("invalid_command", "revision must not be negative")
+            invalidCommand("revision must not be negative")
         }
         when (command.type) {
             "toggle-set" -> {
-                if (command.exerciseIndex == null || command.exerciseIndex < 0) {
-                    invalidCommand("exerciseIndex must be non-negative")
-                }
-                if (command.setIndex == null || command.setIndex < 0) {
-                    invalidCommand("setIndex must be non-negative")
+                validateIndices(command)
+                if (command.completionDateTime.isNullOrBlank()) {
+                    invalidCommand("completionDateTime must not be blank")
                 }
             }
             "update-reps" -> {
-                if (command.exerciseIndex == null || command.exerciseIndex < 0) {
-                    invalidCommand("exerciseIndex must be non-negative")
-                }
-                if (command.setIndex == null || command.setIndex < 0) {
-                    invalidCommand("setIndex must be non-negative")
-                }
-                if (command.reps == null || command.reps < 0) {
+                validateIndices(command)
+                if (command.reps != null && command.reps < 0) {
                     invalidCommand("reps must be non-negative")
+                }
+                if (command.reps != null && command.completionDateTime.isNullOrBlank()) {
+                    invalidCommand("completionDateTime is required when reps is recorded")
+                }
+                if (command.reps == null && command.completionDateTime != null) {
+                    invalidCommand("completionDateTime must be null when reps is cleared")
                 }
             }
             "update-weight" -> {
-                if (command.exerciseIndex == null || command.exerciseIndex < 0) {
-                    invalidCommand("exerciseIndex must be non-negative")
-                }
-                if (command.setIndex == null || command.setIndex < 0) {
-                    invalidCommand("setIndex must be non-negative")
-                }
+                validateIndices(command)
                 if (command.weight == null || !command.weight.isFinite() || command.weight < 0) {
                     invalidCommand("weight must be a non-negative finite number")
                 }
                 if (command.weightUnit.isNullOrBlank()) {
                     invalidCommand("weightUnit must not be blank")
+                }
+                if (command.applyTo !in setOf("thisSet", "uncompletedSets", "allSets")) {
+                    invalidCommand("applyTo must be thisSet, uncompletedSets or allSets")
                 }
             }
             "start-rest" -> if (command.endTime == null || !command.endTime.isFinite() || command.endTime <= 0) {
@@ -281,6 +354,21 @@ object WorkoutEngine {
             }
             "reset-rest", "finish" -> Unit
             else -> invalidCommand("unsupported command type: ${command.type}")
+        }
+    }
+
+    private fun validateIndices(command: WorkoutEngineCommand) {
+        if (command.exerciseIndex == null || command.exerciseIndex < 0) {
+            invalidCommand("exerciseIndex must be non-negative")
+        }
+        if (command.setIndex == null || command.setIndex < 0) {
+            invalidCommand("setIndex must be non-negative")
+        }
+    }
+
+    private fun validateFinite(value: Double?, field: String) {
+        if (value != null && !value.isFinite()) {
+            throw WorkoutEngineException("invalid_snapshot", "$field must be finite")
         }
     }
 
