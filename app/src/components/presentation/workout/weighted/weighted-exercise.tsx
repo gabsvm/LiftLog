@@ -11,6 +11,10 @@ import { OffsetDateTime } from '@js-joda/core';
 import { memo, useCallback, useRef } from 'react';
 import { Weight } from '@/models/weight';
 import BigNumber from 'bignumber.js';
+import {
+  NativeWeightedSetCycle,
+  routeWeightedSetTap,
+} from './weighted-set-tap-router';
 
 interface WeightedExerciseProps {
   recordedExercise: RecordedWeightedExercise;
@@ -27,12 +31,13 @@ interface WeightedExerciseProps {
     ex: RecordedWeightedExercise,
     options?: { resetTimer?: boolean },
   ) => void;
+  nativeCycleSet?: NativeWeightedSetCycle;
   onEditExercise: () => void;
   onRemoveExercise: () => void;
 }
 
 export default function WeightedExercise(props: WeightedExerciseProps) {
-  const { updateExercise, timeProvider } = props;
+  const { updateExercise, timeProvider, nativeCycleSet } = props;
   const { recordedExercise } = props;
   const recordedExerciseRef = useRef(recordedExercise);
   recordedExerciseRef.current = recordedExercise;
@@ -59,18 +64,15 @@ export default function WeightedExercise(props: WeightedExerciseProps) {
 
   const handleTapSet = useCallback(
     (index: number) => {
-      const exercise = recordedExerciseRef.current;
-      const previousSet = exercise.getSet(index).set;
-      const newExercise = exercise.withCycledRepCount(index, timeProvider());
-      const newSet = newExercise.getSet(index).set;
-      // Completing/uncompleting a set and resetting the rest timer must be
-      // one session update. Two Redux updates here caused duplicate
-      // persistence + worker broadcasts on every normal set tap.
-      commitExerciseUpdate(newExercise, {
-        resetTimer: !previousSet || !newSet,
+      routeWeightedSetTap({
+        index,
+        exercise: recordedExerciseRef.current,
+        time: timeProvider(),
+        nativeCycle: nativeCycleSet,
+        commitExerciseUpdate,
       });
     },
-    [commitExerciseUpdate, timeProvider],
+    [commitExerciseUpdate, nativeCycleSet, timeProvider],
   );
 
   const handleUpdateReps = useCallback(
