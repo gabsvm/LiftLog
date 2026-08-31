@@ -3,9 +3,7 @@ import {
   RecordedWeightedExercise,
   Session,
 } from '@/models/session-models';
-import {
-  WORKOUT_ENGINE_SCHEMA_VERSION,
-} from '../../modules/workout-worker';
+import { WORKOUT_ENGINE_SCHEMA_VERSION } from '../../modules/workout-worker';
 import {
   executeWorkoutEngineCommandDryRun,
   WorkoutEngineCommandExecutor,
@@ -145,6 +143,11 @@ export function cycleWeightedSetWithNativeWriter({
       },
       executor,
     );
+    if (activeCursor.revision === 0) {
+      console.info(
+        '[GainsLab] Native weighted set writer active for workout session',
+      );
+    }
     return {
       session: applyExistingRestTimerSemantics(
         session,
@@ -160,6 +163,10 @@ export function cycleWeightedSetWithNativeWriter({
       usedNative: true,
     };
   } catch (nativeError) {
+    console.warn(
+      '[GainsLab] Native weighted set writer failed; using RN fallback for this workout session',
+      nativeError,
+    );
     return {
       session: cycleWeightedSetWithReactNative(
         session,
