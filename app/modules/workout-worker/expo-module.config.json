@@ -4,6 +4,9 @@
     "modules": ["WorkoutWorkerModule"]
   },
   "android": {
-    "modules": ["expo.modules.workoutworker.WorkoutWorkerModule"]
+    "modules": [
+      "expo.modules.workoutworker.WorkoutWorkerModule",
+      "expo.modules.workoutworker.engine.WorkoutEngineModule"
+    ]
   }
 }
