@@ -51,7 +51,7 @@ type CycleWeightedSet = (
   exerciseIndex: number,
   setIndex: number,
   time: OffsetDateTime,
-) => void;
+) => RecordedWeightedExercise | undefined;
 
 type SupersetVisual = {
   label?: string;
@@ -103,7 +103,7 @@ export default function SessionComponent(props: {
     (exerciseIndex, setIndex, time) => {
       const latestSession = selectCurrentSession(getState(), props.target);
       if (!latestSession) {
-        return;
+        return undefined;
       }
 
       const result = cycleWeightedSetWithNativeWriter({
@@ -124,6 +124,11 @@ export default function SessionComponent(props: {
           target: props.target,
         }),
       );
+
+      const updatedExercise = result.session.recordedExercises[exerciseIndex];
+      return updatedExercise?.type === 'RecordedWeightedExercise'
+        ? updatedExercise
+        : undefined;
     },
     [dispatch, getState, props.target],
   );
@@ -500,9 +505,8 @@ const MemoizedSessionExerciseItem = memo(
       [index, updateSession],
     );
     const cycleWeightedSetForExercise = useCallback(
-      (setIndex: number, time: OffsetDateTime) => {
-        cycleWeightedSet?.(index, setIndex, time);
-      },
+      (setIndex: number, time: OffsetDateTime) =>
+        cycleWeightedSet?.(index, setIndex, time),
       [cycleWeightedSet, index],
     );
     const updateCardioExercise = useCallback(
