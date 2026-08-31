@@ -6,6 +6,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application>
+        <activity
+            android:name=".engine.NativeWorkoutPreviewActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="com.gabsvm.gainslab.action.NATIVE_WORKOUT_PREVIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <service
             android:name=".WorkoutWorkerService"
             android:enabled="true"
