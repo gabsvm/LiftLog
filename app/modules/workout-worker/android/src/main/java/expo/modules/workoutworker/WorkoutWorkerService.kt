@@ -46,7 +46,7 @@ class WorkoutWorkerService : Service() {
     private val handlers: List<WorkoutMessageHandler> by lazy {
         listOf(
             WorkoutStartedHandler(notificationManager),
-            WorkoutUpdatedHandler(notificationManager),
+            WorkoutUpdatedHandler(notificationManager, scope),
             WorkoutEndedHandler(notificationManager),
         )
     }

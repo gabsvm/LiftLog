@@ -16,7 +16,7 @@ import com.limajuice.liftlog.WorkoutMessage
 import com.limajuice.liftlog.WorkoutUpdatedEvent
 import expo.modules.workoutworker.utils.RepeatingTimerAction
 import expo.modules.workoutworker.utils.WorkoutNotificationManager
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -24,16 +24,19 @@ import kotlin.time.Duration
 import kotlin.time.DurationUnit.SECONDS
 import kotlin.time.ExperimentalTime
 import kotlin.time.toDuration
+import expo.modules.workoutworker.utils.WorkoutWorkerScope
 
 
 class WorkoutUpdatedHandler(
-    private val notificationManager: WorkoutNotificationManager
+    private val notificationManager: WorkoutNotificationManager,
+    serviceScope: CoroutineScope,
 ) : WorkoutMessageHandler {
     override fun canHandle(event: WorkoutMessage): Boolean {
         return event.payload is WorkoutUpdatedEvent && event.appConfiguration.notificationsEnabled
     }
 
-    val timer = RepeatingTimerAction(MainScope(), {}, intervalMs = 1_000L)
+    private val lifecycleScope = WorkoutWorkerScope(serviceScope)
+    val timer = RepeatingTimerAction(lifecycleScope.scope, {}, intervalMs = 1_000L)
 
     override suspend fun handle(
         event: WorkoutMessage,
@@ -154,7 +157,7 @@ class WorkoutUpdatedHandler(
             if (restNotif != null) {
                 notificationManager.notifyRest(restNotif)
 
-                MainScope().launch {
+                lifecycleScope.scope.launch {
                     delay(10_000)
                     notificationManager.clearRestNotification()
                 }
@@ -277,5 +280,6 @@ class WorkoutUpdatedHandler(
 
     override fun onDestroy() {
         timer.destroy()
+        lifecycleScope.cancel()
     }
 }
