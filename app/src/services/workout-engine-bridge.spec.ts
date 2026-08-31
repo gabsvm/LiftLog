@@ -123,4 +123,37 @@ describe('workout engine dry-run bridge', () => {
     expect(result.shouldFinish).toBe(true);
     expect(result.revision).toBe(1);
   });
+
+  it('blocks rest commands until the contract can round trip Session restTimerStartTime', () => {
+    const session = sessionFixture();
+
+    expect(() =>
+      executeWorkoutEngineCommandDryRun(
+        session,
+        0,
+        {
+          schemaVersion: 2,
+          sessionId: session.id,
+          revision: 1,
+          type: 'start-rest',
+          endTime: 123456,
+        },
+        applyWorkoutEngineCommand,
+      ),
+    ).toThrow('rest timer commands are not bridge-safe');
+
+    expect(() =>
+      executeWorkoutEngineCommandDryRun(
+        session,
+        0,
+        {
+          schemaVersion: 2,
+          sessionId: session.id,
+          revision: 1,
+          type: 'reset-rest',
+        },
+        applyWorkoutEngineCommand,
+      ),
+    ).toThrow('rest timer commands are not bridge-safe');
+  });
 });
