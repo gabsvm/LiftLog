@@ -5,7 +5,7 @@ import {
 } from '@/store/current-session';
 import { Card, Icon, Text } from 'react-native-paper';
 import { useDispatch, useStore } from 'react-redux';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import EmptyInfo from '@/components/presentation/foundation/empty-info';
 import { useAppTheme, spacing, font } from '@/hooks/useAppTheme';
 import { T, useTranslate } from '@tolgee/react';
@@ -20,7 +20,7 @@ import WeightedExercise from '@/components/presentation/workout/weighted/weighte
 import WeightDisplay from '@/components/presentation/foundation/editors/weight-display';
 import BigNumber from 'bignumber.js';
 import RestTimer from '@/components/presentation/workout/rest-timer';
-import { memo, ReactNode, useCallback, useState } from 'react';
+import { memo, ReactNode, useCallback, useRef, useState } from 'react';
 import FullHeightScrollView from '@/components/layout/full-height-scroll-view';
 import {
   ExerciseBlueprint,
@@ -36,10 +36,22 @@ import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { CardioExercise } from '@/components/presentation/workout/cardio/cardio-exercise';
 import WeightFormat from '../presentation/foundation/weight-format';
 import { formatDuration } from '@/utils/format-date';
+import {
+  cycleWeightedSetWithNativeWriter,
+  NativeWeightedSetWriterCursor,
+} from '@/services/native-weighted-set-writer';
 
 const BODYWEIGHT_INCREMENT = new BigNumber('0.1');
+const NATIVE_WEIGHTED_SET_WRITER_EXPERIMENT_ENABLED =
+  process.env.EXPO_PUBLIC_GAINS_NATIVE_SET_WRITER === '1' ||
+  process.env.EXPO_PUBLIC_GAINS_NATIVE_SET_WRITER === 'true';
 
 type UpdateSession = (reducer: (session: Session) => Session) => void;
+type CycleWeightedSet = (
+  exerciseIndex: number,
+  setIndex: number,
+  time: OffsetDateTime,
+) => void;
 
 type SupersetVisual = {
   label?: string;
@@ -63,6 +75,13 @@ export default function SessionComponent(props: {
     selectRecentlyCompletedExercises,
     10,
   );
+  const nativeWeightedSetWriterCursorRef = useRef<NativeWeightedSetWriterCursor>(
+    {
+      sessionId: '',
+      revision: 0,
+      disabled: false,
+    },
+  );
 
   const updateSession = useCallback<UpdateSession>(
     (reducer) => {
@@ -73,6 +92,35 @@ export default function SessionComponent(props: {
       dispatch(
         setCurrentSession({
           session: reducer(latestSession),
+          target: props.target,
+        }),
+      );
+    },
+    [dispatch, getState, props.target],
+  );
+
+  const cycleWeightedSet = useCallback<CycleWeightedSet>(
+    (exerciseIndex, setIndex, time) => {
+      const latestSession = selectCurrentSession(getState(), props.target);
+      if (!latestSession) {
+        return;
+      }
+
+      const result = cycleWeightedSetWithNativeWriter({
+        session: latestSession,
+        exerciseIndex,
+        setIndex,
+        time,
+        cursor: nativeWeightedSetWriterCursorRef.current,
+      });
+      nativeWeightedSetWriterCursorRef.current = result.cursor;
+
+      // The native experiment owns only the mutation. Redux remains the single
+      // Session commit/persistence boundary, so this dispatch occurs exactly
+      // once whether Kotlin succeeds or the writer falls back to RN.
+      dispatch(
+        setCurrentSession({
+          session: result.session,
           target: props.target,
         }),
       );
@@ -104,6 +152,10 @@ export default function SessionComponent(props: {
 
   const isReadonly =
     props.target === 'feedSession' || props.target === 'sharedSession';
+  const nativeWeightedSetWriterEnabled =
+    NATIVE_WEIGHTED_SET_WRITER_EXPERIMENT_ENABLED &&
+    Platform.OS === 'android' &&
+    props.target === 'workoutSession';
 
   const [exerciseToEditIndex, setExerciseToEditIndex] = useState<
     number | undefined
@@ -350,6 +402,9 @@ export default function SessionComponent(props: {
               supersetConnectAfter={supersetVisual?.connectAfter ?? false}
               timeProvider={timeProvider}
               updateSession={updateSession}
+              cycleWeightedSet={
+                nativeWeightedSetWriterEnabled ? cycleWeightedSet : undefined
+              }
               beginEditExercise={beginEditExercise}
             />
           );
@@ -398,6 +453,7 @@ interface SessionExerciseItemProps {
   supersetConnectAfter: boolean;
   timeProvider: () => OffsetDateTime;
   updateSession: UpdateSession;
+  cycleWeightedSet?: CycleWeightedSet;
   beginEditExercise: (index: number, blueprint: ExerciseBlueprint) => void;
 }
 
@@ -415,6 +471,7 @@ const MemoizedSessionExerciseItem = memo(
       supersetConnectAfter,
       timeProvider,
       updateSession,
+      cycleWeightedSet,
       beginEditExercise,
     } = props;
 
@@ -442,6 +499,12 @@ const MemoizedSessionExerciseItem = memo(
       },
       [index, updateSession],
     );
+    const cycleWeightedSetForExercise = useCallback(
+      (setIndex: number, time: OffsetDateTime) => {
+        cycleWeightedSet?.(index, setIndex, time);
+      },
+      [cycleWeightedSet, index],
+    );
     const updateCardioExercise = useCallback(
       (reducer: (exercise: RecordedCardioExercise) => RecordedCardioExercise) => {
         updateSession((s) => {
@@ -462,6 +525,9 @@ const MemoizedSessionExerciseItem = memo(
           recordedExercise={recordedExercise}
           toStartNext={toStartNext}
           updateExercise={updateWeightedExercise}
+          nativeCycleSet={
+            cycleWeightedSet ? cycleWeightedSetForExercise : undefined
+          }
           onEditExercise={editExercise}
           onRemoveExercise={removeExercise}
           isReadonly={isReadonly}
@@ -502,6 +568,7 @@ const MemoizedSessionExerciseItem = memo(
     previous.supersetConnectAfter === next.supersetConnectAfter &&
     previous.timeProvider === next.timeProvider &&
     previous.updateSession === next.updateSession &&
+    previous.cycleWeightedSet === next.cycleWeightedSet &&
     previous.beginEditExercise === next.beginEditExercise &&
     sameExerciseReferences(
       previous.previousRecordedExercises,
