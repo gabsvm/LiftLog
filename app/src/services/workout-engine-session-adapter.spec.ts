@@ -148,9 +148,11 @@ describe('workout engine session adapter', () => {
     if (weighted?.type !== 'RecordedWeightedExercise') return;
     expect(weighted.blueprint).toBe(original.recordedExercises[0]?.blueprint);
     expect(weighted.potentialSets[1]?.set?.repsCompleted).toBe(6);
-    expect(weighted.potentialSets[1]?.set?.completionDateTime.toString()).toBe(
-      '2026-08-31T15:12-03:00',
-    );
+    expect(
+      weighted.potentialSets[1]?.set?.completionDateTime.equals(
+        OffsetDateTime.parse('2026-08-31T15:12:00-03:00'),
+      ),
+    ).toBe(true);
     expect(weighted.potentialSets[1]?.weight.value.toNumber()).toBe(82.5);
     expect(result.shouldFinish).toBe(false);
   });
