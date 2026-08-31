@@ -16,6 +16,7 @@ export type WorkoutEngineSetSnapshot = {
 export type WorkoutEngineExerciseSnapshot = {
   exerciseIndex: number;
   type: WorkoutEngineExerciseType;
+  repsPerSet: number | null;
   supersetWithNext: boolean;
   sets: WorkoutEngineSetSnapshot[];
 };
@@ -177,6 +178,10 @@ function parseExercise(
       'exercise.type must be weighted or cardio',
     );
   }
+  const repsPerSet =
+    value.repsPerSet === null
+      ? null
+      : requireNonNegativeInteger(value.repsPerSet, 'repsPerSet');
   if (typeof value.supersetWithNext !== 'boolean') {
     throw new WorkoutEngineCommandError(
       'invalid_snapshot',
@@ -192,6 +197,7 @@ function parseExercise(
   return {
     exerciseIndex,
     type: value.type,
+    repsPerSet,
     supersetWithNext: value.supersetWithNext,
     sets: value.sets.map(parseSet),
   };
@@ -342,9 +348,23 @@ export function applyWorkoutEngineCommand(
           'exerciseIndex',
         );
         const setIndex = parseCommandIndex(command.setIndex, 'setIndex');
-        return withUpdatedSet(current, exerciseIndex, setIndex, (set) => ({
-          ...set,
-          completed: !set.completed,
+        const exercise = current.exercises[exerciseIndex];
+        const set = getSet(current, exerciseIndex, setIndex);
+        if (exercise?.type === 'weighted' && exercise.repsPerSet !== null) {
+          const nextSet = !set.completed
+            ? { ...set, completed: true, reps: exercise.repsPerSet }
+            : set.reps === 0
+              ? { ...set, completed: false, reps: null }
+              : {
+                  ...set,
+                  completed: true,
+                  reps: Math.max(0, (set.reps ?? exercise.repsPerSet) - 1),
+                };
+          return withUpdatedSet(current, exerciseIndex, setIndex, () => nextSet);
+        }
+        return withUpdatedSet(current, exerciseIndex, setIndex, (currentSet) => ({
+          ...currentSet,
+          completed: !currentSet.completed,
         }));
       }
       case 'update-reps': {
@@ -361,6 +381,7 @@ export function applyWorkoutEngineCommand(
         }
         return withUpdatedSet(current, exerciseIndex, setIndex, (set) => ({
           ...set,
+          completed: true,
           reps: command.reps,
         }));
       }

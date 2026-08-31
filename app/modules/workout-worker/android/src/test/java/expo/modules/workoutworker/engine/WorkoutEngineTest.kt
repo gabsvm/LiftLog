@@ -17,6 +17,7 @@ class WorkoutEngineTest {
             WorkoutEngineExerciseSnapshot(
                 exerciseIndex = 0,
                 type = "weighted",
+                repsPerSet = 8,
                 supersetWithNext = true,
                 sets = listOf(
                     WorkoutEngineSetSnapshot(0, false, null, 80.0, "kilograms"),
@@ -26,6 +27,7 @@ class WorkoutEngineTest {
             WorkoutEngineExerciseSnapshot(
                 exerciseIndex = 1,
                 type = "cardio",
+                repsPerSet = null,
                 supersetWithNext = false,
                 sets = listOf(WorkoutEngineSetSnapshot(0, false, null, null, null)),
             ),
@@ -58,12 +60,27 @@ class WorkoutEngineTest {
     )
 
     @Test
-    fun `toggle updates one set and preserves metadata`() {
-        val next = WorkoutEngine.apply(snapshot(), command("toggle-set", exerciseIndex = 0, setIndex = 0))
+    fun `toggle cycles one set and preserves metadata`() {
+        val completed = WorkoutEngine.apply(snapshot(), command("toggle-set", exerciseIndex = 0, setIndex = 0))
+        val decremented = WorkoutEngine.apply(completed, command("toggle-set", revision = 2, exerciseIndex = 0, setIndex = 0))
+        val next = WorkoutEngine.apply(
+            decremented.copy(
+                exercises = decremented.exercises.mapIndexed { index, exercise ->
+                    if (index == 0) exercise.copy(
+                        sets = exercise.sets.mapIndexed { setIndex, set ->
+                            if (setIndex == 0) set.copy(reps = 0) else set
+                        },
+                    ) else exercise
+                },
+            ),
+            command("toggle-set", revision = 3, exerciseIndex = 0, setIndex = 0),
+        )
 
-        assertEquals(1, next.revision)
-        assertTrue(next.exercises[0].sets[0].completed)
-        assertFalse(next.exercises[0].sets[1].completed)
+        assertEquals(1, completed.revision)
+        assertEquals(8, completed.exercises[0].sets[0].reps)
+        assertEquals(7, decremented.exercises[0].sets[0].reps)
+        assertFalse(next.exercises[0].sets[0].completed)
+        assertNull(next.exercises[0].sets[0].reps)
         assertTrue(next.exercises[0].supersetWithNext)
         assertEquals("cardio", next.exercises[1].type)
     }

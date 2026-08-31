@@ -17,6 +17,7 @@ data class WorkoutEngineSetSnapshot(
 data class WorkoutEngineExerciseSnapshot(
     val exerciseIndex: Int,
     val type: String,
+    val repsPerSet: Int?,
     val supersetWithNext: Boolean,
     val sets: List<WorkoutEngineSetSnapshot>,
 )
@@ -123,11 +124,23 @@ object WorkoutEngine {
 
         val next = when (command.type) {
             "toggle-set" -> updateSet(snapshot, command) { set ->
-                set.copy(completed = !set.completed)
+                val exercise = snapshot.exercises[command.exerciseIndex!!]
+                if (exercise.type == "weighted" && exercise.repsPerSet != null) {
+                    when {
+                        !set.completed -> set.copy(completed = true, reps = exercise.repsPerSet)
+                        set.reps == 0 -> set.copy(completed = false, reps = null)
+                        else -> set.copy(
+                            completed = true,
+                            reps = (set.reps ?: exercise.repsPerSet) - 1,
+                        )
+                    }
+                } else {
+                    set.copy(completed = !set.completed)
+                }
             }
 
             "update-reps" -> updateSet(snapshot, command) { set ->
-                set.copy(reps = command.reps)
+                set.copy(completed = true, reps = command.reps)
             }
 
             "update-weight" -> updateSet(snapshot, command) { set ->
@@ -192,6 +205,9 @@ object WorkoutEngine {
             }
             if (exercise.type != "weighted" && exercise.type != "cardio") {
                 throw WorkoutEngineException("invalid_snapshot", "unsupported exercise type")
+            }
+            if (exercise.repsPerSet != null && exercise.repsPerSet < 0) {
+                throw WorkoutEngineException("invalid_snapshot", "repsPerSet must not be negative")
             }
             exercise.sets.forEachIndexed { setPosition, set ->
                 if (set.setIndex < 0 || set.setIndex != setPosition) {

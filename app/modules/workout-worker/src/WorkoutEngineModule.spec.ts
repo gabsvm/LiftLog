@@ -16,6 +16,7 @@ const initialSnapshot: WorkoutEngineSnapshot = {
     {
       exerciseIndex: 0,
       type: 'weighted',
+      repsPerSet: 8,
       supersetWithNext: true,
       sets: [
         {
@@ -37,6 +38,7 @@ const initialSnapshot: WorkoutEngineSnapshot = {
     {
       exerciseIndex: 1,
       type: 'cardio',
+      repsPerSet: null,
       supersetWithNext: false,
       sets: [{ setIndex: 0, completed: false, reps: null, weight: null, weightUnit: null }],
     },
@@ -82,15 +84,38 @@ describe('WorkoutEngine contract', () => {
     expect(parsed).toEqual(initialSnapshot);
   });
 
-  it('toggles one weighted set and advances exactly one revision', () => {
-    const next = applyWorkoutEngineCommand(
+  it('cycles a weighted set exactly like the existing rep counter', () => {
+    const completed = applyWorkoutEngineCommand(
       initialSnapshot,
       command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }),
     );
+    const decremented = applyWorkoutEngineCommand(
+      completed,
+      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }, 2),
+    );
+    const cleared = applyWorkoutEngineCommand(
+      {
+        ...decremented,
+        exercises: decremented.exercises.map((exercise, exerciseIndex) =>
+          exerciseIndex === 0
+            ? {
+                ...exercise,
+                sets: exercise.sets.map((set, setIndex) =>
+                  exerciseIndex === 0 && setIndex === 0
+                    ? { ...set, reps: 0, completed: true }
+                    : set,
+                ),
+              }
+            : exercise,
+        ),
+      },
+      command({ type: 'toggle-set', exerciseIndex: 0, setIndex: 0 }, 3),
+    );
 
-    expect(next.revision).toBe(1);
-    expect(next.exercises[0]?.sets[0]?.completed).toBe(true);
-    expect(next.exercises[0]?.sets[1]?.completed).toBe(false);
+    expect(completed.revision).toBe(1);
+    expect(completed.exercises[0]?.sets[0]).toMatchObject({ completed: true, reps: 8 });
+    expect(decremented.exercises[0]?.sets[0]).toMatchObject({ completed: true, reps: 7 });
+    expect(cleared.exercises[0]?.sets[0]).toMatchObject({ completed: false, reps: null });
   });
 
   it('treats an already-applied revision as an idempotent retry', () => {
@@ -143,6 +168,7 @@ describe('WorkoutEngine contract', () => {
     );
 
     expect(withWeight.exercises[0]?.sets[0]).toMatchObject({
+      completed: true,
       reps: 9,
       weight: 82.5,
     });
