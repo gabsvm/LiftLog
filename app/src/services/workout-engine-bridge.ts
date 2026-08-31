@@ -42,9 +42,9 @@ export function validateWorkoutEngineRoundTrip(
 
 /**
  * Executes exactly one command against a real Session through the engine and
- * returns the reconciled result. It deliberately has no persistence/navigation
- * side effects: React Native remains the only writer until the device parity
- * gate explicitly enables a native session owner.
+ * returns the reconciled result without persistence/navigation side effects.
+ * The parity tools use this as a dry run; the opt-in weighted-set writer uses
+ * the same boundary and then performs exactly one normal Redux Session commit.
  *
  * Rest commands carry the persistible start timestamp and the derived end
  * projection. This keeps the bridge reversible without copying prescription
