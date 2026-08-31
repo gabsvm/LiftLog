@@ -12,7 +12,7 @@ import { useTranslate } from '@tolgee/react';
 import { ScrollView, View } from 'react-native';
 import { match } from 'ts-pattern';
 import { DecimalEditor } from '@/components/presentation/foundation/editors/decimal-editor';
-import { Dialog, Divider, Text } from 'react-native-paper';
+import { Divider, Text } from 'react-native-paper';
 import { spacing } from '@/hooks/useAppTheme';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { useState } from 'react';
@@ -28,6 +28,7 @@ import { Portal } from 'react-native-paper';
 import { OffsetDateTime } from '@js-joda/core';
 import { Weight } from '@/models/weight';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 interface Props {
   value: ProgressiveOverload;
@@ -198,11 +199,11 @@ function ProgressiveOverloadExample(props: { value: ProgressiveOverload }) {
         {t('exercise.progressive_overload.example.label')}
       </Button>
       <Portal>
-        <Dialog visible={exampleOpen} onDismiss={() => setExampleOpen(false)}>
-          <Dialog.Title>
+        <GainsLabDialog visible={exampleOpen} onDismiss={() => setExampleOpen(false)}>
+          <GainsLabDialog.Title>
             {t('exercise.progressive_overload.example.label')}
-          </Dialog.Title>
-          <Dialog.Content style={{ height: 400 }}>
+          </GainsLabDialog.Title>
+          <GainsLabDialog.Content style={{ height: 400 }}>
             <ScrollView
               contentContainerStyle={{ gap: spacing[4], alignItems: 'center' }}
               style={{ flex: 1 }}
@@ -231,13 +232,13 @@ function ProgressiveOverloadExample(props: { value: ProgressiveOverload }) {
                 ))}
               </View>
             </ScrollView>
-          </Dialog.Content>
-          <Dialog.Actions>
+          </GainsLabDialog.Content>
+          <GainsLabDialog.Actions>
             <Button onPress={() => setExampleOpen(false)}>
               {t('generic.ok.button')}
             </Button>
-          </Dialog.Actions>
-        </Dialog>
+          </GainsLabDialog.Actions>
+        </GainsLabDialog>
       </Portal>
     </>
   );

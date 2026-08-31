@@ -6,7 +6,7 @@ import {
 } from '@/models/session-models';
 import { ReactNode, useState } from 'react';
 import { Linking, View } from 'react-native';
-import { Menu, Text, Tooltip } from 'react-native-paper';
+import { Text, Tooltip } from 'react-native-paper';
 import { useTranslate } from '@tolgee/react';
 import PreviousExerciseViewer from '@/components/presentation/workout/weighted/previous-exercise-viewer';
 import ConfirmationDialog from '@/components/presentation/foundation/confirmation-dialog';
@@ -14,6 +14,7 @@ import ExerciseNotesDisplay from '@/components/presentation/workout/exercise-not
 import RecordedExerciseNotesEditor from '@/components/presentation/workout/recorded-exercise-notes-editor';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import { useRouter } from 'expo-router';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 interface ExerciseSectionProps<T extends RecordedExercise> {
   recordedExercise: T;
@@ -65,7 +66,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
           />
         </Tooltip>
       ) : null}
-      <Menu
+      <GainsLabMenu
         visible={menuVisible}
         onDismiss={() => setMenuVisible(false)}
         anchor={
@@ -79,7 +80,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
       >
         {menuVisible ? (
           <>
-            <Menu.Item
+            <GainsLabMenu.Item
               onPress={() => {
                 props.onEditExercise();
                 setMenuVisible(false);
@@ -88,7 +89,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
               leadingIcon={'edit'}
               title={t('generic.edit.button')}
             />
-            <Menu.Item
+            <GainsLabMenu.Item
               testID="exercise-notes-more-btn"
               title={t('generic.notes.label')}
               leadingIcon={'notes'}
@@ -98,7 +99,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
               }}
             />
             {showStats ? (
-              <Menu.Item
+              <GainsLabMenu.Item
                 onPress={() => {
                   push(
                     `/stats/expanded-weighted-exercise?exerciseName=${encodeURIComponent(recordedExercise.blueprint.name)}`,
@@ -111,7 +112,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
                 title={t('stats.stats.title')}
               />
             ) : null}
-            <Menu.Item
+            <GainsLabMenu.Item
               onPress={() => {
                 setRemoveExerciseDialogOpen(true);
                 setMenuVisible(false);
@@ -120,7 +121,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
               title={t('generic.remove.button')}
             />
             {!!props.recordedExercise.blueprint.link && (
-              <Menu.Item
+              <GainsLabMenu.Item
                 onPress={() => {
                   openUrl(props.recordedExercise.blueprint.link);
                   setMenuVisible(false);
@@ -131,7 +132,7 @@ export default function ExerciseSection<T extends RecordedExercise>(
             )}
           </>
         ) : null}
-      </Menu>
+      </GainsLabMenu>
     </View>
   );
 

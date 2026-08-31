@@ -1,7 +1,6 @@
 import { DayOfWeek, Period } from '@js-joda/core';
 import { useState } from 'react';
 import { ScrollView } from 'react-native-gesture-handler';
-import { Menu } from 'react-native-paper';
 import Button, {
   ButtonProps,
 } from '@/components/presentation/foundation/gesture-wrappers/button';
@@ -10,6 +9,7 @@ import {
   isLocalDateRangeEqual,
   LocalDateRange,
 } from '@/models/time-models';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 export interface SelectButtonOption<T> {
   value: T;
@@ -39,7 +39,7 @@ export default function SelectButton<
   const valueLabel = options.find((x) => isEqual(x.value, value))?.label;
   const [open, setOpen] = useState(false);
   return (
-    <Menu
+    <GainsLabMenu
       visible={open}
       onDismiss={() => {
         setOpen(false);
@@ -65,7 +65,7 @@ export default function SelectButton<
           {options.map(
             (option) =>
               !option.disabledAndHidden && (
-                <Menu.Item
+                <GainsLabMenu.Item
                   key={option.label}
                   title={option.label}
                   onPress={() => {
@@ -78,7 +78,7 @@ export default function SelectButton<
           )}
         </ScrollView>
       ) : null}
-    </Menu>
+    </GainsLabMenu>
   );
 }
 

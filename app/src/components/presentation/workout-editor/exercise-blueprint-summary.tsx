@@ -4,7 +4,6 @@ import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { spacing } from '@/hooks/useAppTheme';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { Menu } from 'react-native-paper';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import TouchableRipple from '@/components/presentation/foundation/gesture-wrappers/touchable-ripple';
 import { useTranslate } from '@tolgee/react';
@@ -18,6 +17,7 @@ import {
 import { match, P } from 'ts-pattern';
 import { formatDistance } from '@/utils/distance';
 import LimitedHtml from '@/components/presentation/foundation/limited-html';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 interface ExerciseBlueprintSummaryProps {
   blueprint: ExerciseBlueprint;
@@ -61,7 +61,7 @@ export default function ExerciseBlueprintSummary({
             <IconButton onPress={onMoveUp} icon={'arrowUpward'} />
             <IconButton onPress={onMoveDown} icon={'arrowDownward'} />
             <IconButton onPress={onRemove} icon={'delete'} />
-            <Menu
+            <GainsLabMenu
               visible={menuOpen}
               onDismiss={() => setMenuOpen(false)}
               anchor={
@@ -71,7 +71,7 @@ export default function ExerciseBlueprintSummary({
                 />
               }
             >
-              <Menu.Item
+              <GainsLabMenu.Item
                 title={t('exercise.copy_to.button')}
                 leadingIcon={'copyAll'}
                 onPress={() => {
@@ -79,7 +79,7 @@ export default function ExerciseBlueprintSummary({
                   onCopyTo();
                 }}
               />
-            </Menu>
+            </GainsLabMenu>
           </View>
         </View>
         {match(blueprint)

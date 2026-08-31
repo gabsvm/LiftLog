@@ -16,8 +16,9 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
-import { List, Menu, RadioButton } from 'react-native-paper';
+import { List, RadioButton } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 interface ProgramListItemProps {
   id: string;
@@ -36,7 +37,7 @@ function ItemMenu({ id }: ItemProps) {
   const { push } = useRouter();
   const { t } = useTranslate();
   return (
-    <Menu
+    <GainsLabMenu
       visible={menuVisible}
       onDismiss={() => setMenuVisible(false)}
       anchor={
@@ -47,7 +48,7 @@ function ItemMenu({ id }: ItemProps) {
         />
       }
     >
-      <Menu.Item
+      <GainsLabMenu.Item
         onPress={() => {
           push(`/settings/manage-workouts/${id}`);
           setMenuVisible(false);
@@ -55,7 +56,7 @@ function ItemMenu({ id }: ItemProps) {
         leadingIcon={'edit'}
         title={t('generic.edit.button')}
       />
-      <Menu.Item
+      <GainsLabMenu.Item
         onPress={() => {
           if (!isActive) {
             dispatch(
@@ -76,7 +77,7 @@ function ItemMenu({ id }: ItemProps) {
         disabled={isActive}
         title={t('generic.remove.button')}
       />
-      <Menu.Item
+      <GainsLabMenu.Item
         title={t('generic.duplicate.button')}
         leadingIcon={'contentCopy'}
         onPress={() => {
@@ -86,7 +87,7 @@ function ItemMenu({ id }: ItemProps) {
           );
         }}
       />
-      <Menu.Item
+      <GainsLabMenu.Item
         leadingIcon={'share'}
         title={t('generic.share.button')}
         onPress={() => {
@@ -99,7 +100,7 @@ function ItemMenu({ id }: ItemProps) {
           );
         }}
       />
-    </Menu>
+    </GainsLabMenu>
   );
 }
 

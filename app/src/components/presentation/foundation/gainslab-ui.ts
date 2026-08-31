@@ -1,3 +1,5 @@
+import type { AppThemeColors } from '@/hooks/useAppTheme';
+
 export const gainsLabRadii = {
   hero: 20,
   card: 16,
@@ -18,3 +20,26 @@ export const gainsLabMotion = {
   progressMs: 200,
   modalMs: 240,
 } as const;
+
+type GainsLabOverlayColors = Pick<
+  AppThemeColors,
+  'surfaceContainerHigh' | 'surfaceContainerHighest' | 'outlineVariant'
+>;
+
+export function getGainsLabDialogStyle(colors: GainsLabOverlayColors) {
+  return {
+    backgroundColor: colors.surfaceContainerHigh,
+    borderColor: colors.outlineVariant,
+    borderRadius: gainsLabRadii.focus,
+    borderWidth: 1,
+  };
+}
+
+export function getGainsLabMenuStyle(colors: GainsLabOverlayColors) {
+  return {
+    backgroundColor: colors.surfaceContainerHighest,
+    borderColor: colors.outlineVariant,
+    borderRadius: gainsLabRadii.compact,
+    borderWidth: 1,
+  };
+}

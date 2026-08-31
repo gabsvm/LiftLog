@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
-import { Dialog, Portal, Text, TextInput } from 'react-native-paper';
+import { Portal, Text, TextInput } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 interface PotentialSetAdditionalActionsDialogProps {
   open: boolean;
@@ -51,11 +52,11 @@ export default function PotentialSetAdditionalActionsDialog({
           behavior={'height'}
           style={{ flex: 1, pointerEvents: open ? 'box-none' : 'none' }}
         >
-          <Dialog visible={open} onDismiss={close}>
-            <Dialog.Title>
+          <GainsLabDialog visible={open} onDismiss={close}>
+            <GainsLabDialog.Title>
               <T keyName="exercise.select_reps.title" />
-            </Dialog.Title>
-            <Dialog.Content>
+            </GainsLabDialog.Title>
+            <GainsLabDialog.Content>
               <TextInput
                 label={<T keyName="exercise.reps.label" />}
                 inputMode="numeric"
@@ -91,16 +92,16 @@ export default function PotentialSetAdditionalActionsDialog({
                   }}
                 />
               </View>
-            </Dialog.Content>
-            <Dialog.Actions>
+            </GainsLabDialog.Content>
+            <GainsLabDialog.Actions>
               <Button onPress={close}>
                 {<T keyName="generic.cancel.button" />}
               </Button>
               <Button disabled={!isValid} onPress={save}>
                 {<T keyName="generic.save.button" />}
               </Button>
-            </Dialog.Actions>
-          </Dialog>
+            </GainsLabDialog.Actions>
+          </GainsLabDialog>
         </KeyboardAvoidingView>
       </Portal>
     )

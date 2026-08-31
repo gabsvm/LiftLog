@@ -4,8 +4,9 @@ import { spacing } from '@/hooks/useAppTheme';
 import { RecordedExercise } from '@/models/session-models';
 import { T } from '@tolgee/react';
 import { View } from 'react-native';
-import { Portal, Dialog } from 'react-native-paper';
+import { Portal } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 function PreviousExerciseContent(props: {
   previousRecordedExercises: RecordedExercise[];
@@ -41,24 +42,24 @@ export default function PreviousExerciseViewer(props: {
 }) {
   return (
     <Portal>
-      <Dialog visible={props.open} onDismiss={props.close}>
-        <Dialog.Title>
+      <GainsLabDialog visible={props.open} onDismiss={props.close}>
+        <GainsLabDialog.Title>
           <T
             keyName="exercise.previous_sessions_for.title"
             params={{ exercise: props.name }}
           />
-        </Dialog.Title>
-        <Dialog.Content>
+        </GainsLabDialog.Title>
+        <GainsLabDialog.Content>
           <PreviousExerciseContent
             previousRecordedExercises={props.previousRecordedExercises}
           />
-        </Dialog.Content>
-        <Dialog.Actions>
+        </GainsLabDialog.Content>
+        <GainsLabDialog.Actions>
           <Button onPress={props.close}>
             <T keyName="generic.close.button" />
           </Button>
-        </Dialog.Actions>
-      </Dialog>
+        </GainsLabDialog.Actions>
+      </GainsLabDialog>
     </Portal>
   );
 }

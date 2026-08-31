@@ -5,7 +5,8 @@ import { T } from '@tolgee/react';
 import { ReactNode, useState } from 'react';
 import { StyleSheet, ViewStyle } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { Portal, Dialog, Text } from 'react-native-paper';
+import { Portal, Text } from 'react-native-paper';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 export function CardioValueSelector(props: {
   children: ReactNode;
@@ -40,17 +41,17 @@ export function CardioValueSelector(props: {
             behavior={'height'}
             style={{ flex: 1, pointerEvents: dialogOpen ? 'box-none' : 'none' }}
           >
-            <Dialog visible={dialogOpen} onDismiss={() => setDialogOpen(false)}>
-              <Dialog.Title>{label}</Dialog.Title>
-              <Dialog.Content
+            <GainsLabDialog visible={dialogOpen} onDismiss={() => setDialogOpen(false)}>
+              <GainsLabDialog.Title>{label}</GainsLabDialog.Title>
+              <GainsLabDialog.Content
                 style={[
                   { flexDirection: 'row', alignItems: 'center' },
                   props.style,
                 ]}
               >
                 {children}
-              </Dialog.Content>
-              <Dialog.Actions>
+              </GainsLabDialog.Content>
+              <GainsLabDialog.Actions>
                 <Button onPress={() => setDialogOpen(false)}>
                   <T keyName="generic.cancel.button" />
                 </Button>
@@ -62,8 +63,8 @@ export function CardioValueSelector(props: {
                 >
                   <T keyName="generic.save.button" />
                 </Button>
-              </Dialog.Actions>
-            </Dialog>
+              </GainsLabDialog.Actions>
+            </GainsLabDialog>
           </KeyboardAvoidingView>
         </Portal>
       )}

@@ -6,10 +6,11 @@ import { useTranslate } from '@tolgee/react';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { match } from 'ts-pattern';
-import { Dialog, SegmentedButtons } from 'react-native-paper';
+import { SegmentedButtons } from 'react-native-paper';
 import { Portal } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 type ButtonValues = 'short' | 'medium' | 'long' | 'custom';
 
@@ -77,11 +78,11 @@ export function RestEditorDialog(props: RestEditorDialogProps) {
             pointerEvents: props.dialogOpen ? 'box-none' : 'none',
           }}
         >
-          <Dialog
+          <GainsLabDialog
             visible={props.dialogOpen}
             onDismiss={() => props.setDialogOpen(false)}
           >
-            <Dialog.Content>
+            <GainsLabDialog.Content>
               <View style={{ width: '100%' }}>
                 <SegmentedButtons
                   style={{ width: '100%' }}
@@ -108,13 +109,13 @@ export function RestEditorDialog(props: RestEditorDialogProps) {
                 />
               </View>
               {customView}
-            </Dialog.Content>
-            <Dialog.Actions>
+            </GainsLabDialog.Content>
+            <GainsLabDialog.Actions>
               <Button onPress={() => props.setDialogOpen(false)}>
                 {t('generic.close.button')}
               </Button>
-            </Dialog.Actions>
-          </Dialog>
+            </GainsLabDialog.Actions>
+          </GainsLabDialog>
         </KeyboardAvoidingView>
       </Portal>
     )

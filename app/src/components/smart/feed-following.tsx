@@ -10,11 +10,12 @@ import {
 } from '@/store/feed';
 import { T, useTranslate } from '@tolgee/react';
 import React, { useState } from 'react';
-import { List, Menu } from 'react-native-paper';
+import { List } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import { LegendList } from '@legendapp/list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 export function FeedFollowing() {
   const following = useAppSelector(selectFeedFollowing);
@@ -63,7 +64,7 @@ function FeedFollowingItem(props: { user: FeedUser; userId: string }) {
           : t('generic.awaiting_response.label')
       }
       right={() => (
-        <Menu
+        <GainsLabMenu
           visible={menuVisible}
           onDismiss={() => setMenuVisible(false)}
           anchor={
@@ -74,7 +75,7 @@ function FeedFollowingItem(props: { user: FeedUser; userId: string }) {
             />
           }
         >
-          <Menu.Item
+          <GainsLabMenu.Item
             onPress={() => {
               unfollow();
               setMenuVisible(false);
@@ -82,7 +83,7 @@ function FeedFollowingItem(props: { user: FeedUser; userId: string }) {
             leadingIcon={'personRemove'}
             title={t('feed.unfollow.button')}
           />
-        </Menu>
+        </GainsLabMenu>
       )}
     />
   );

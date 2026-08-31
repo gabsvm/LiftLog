@@ -18,7 +18,7 @@ import {
 } from '@/store/program';
 import { useTranslate } from '@tolgee/react';
 import { useState } from 'react';
-import { Menu } from 'react-native-paper';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 import { useDispatch } from 'react-redux';
 
 interface ManageWorkoutCardContentProps {
@@ -114,14 +114,14 @@ function Actions({
     <>
       <IconButton onPress={moveSessionUp} icon={'arrowUpward'} />
       <IconButton onPress={moveSessionDown} icon={'arrowDownward'} />
-      <Menu
+      <GainsLabMenu
         visible={menuOpen}
         onDismiss={() => setMenuOpen(false)}
         anchor={
           <IconButton onPress={() => setMenuOpen(true)} icon={'moreHoriz'} />
         }
       >
-        <Menu.Item
+        <GainsLabMenu.Item
           onPress={() => {
             setMenuOpen(false);
             removeSession();
@@ -129,7 +129,7 @@ function Actions({
           leadingIcon={'delete'}
           title={t('generic.remove.button')}
         />
-        <Menu.Item
+        <GainsLabMenu.Item
           title={t('generic.duplicate.button')}
           leadingIcon={'contentCopy'}
           onPress={() => {
@@ -137,7 +137,7 @@ function Actions({
             duplicateSession();
           }}
         />
-        <Menu.Item
+        <GainsLabMenu.Item
           title={t('exercise.copy_to.button')}
           leadingIcon={'copyAll'}
           onPress={() => {
@@ -145,7 +145,7 @@ function Actions({
             setCopyDialogOpen(true);
           }}
         />
-      </Menu>
+      </GainsLabMenu>
       <CopyWorkoutDialog
         visible={copyDialogOpen}
         onDismiss={() => setCopyDialogOpen(false)}

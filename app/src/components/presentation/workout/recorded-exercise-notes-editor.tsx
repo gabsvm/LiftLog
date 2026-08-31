@@ -3,7 +3,8 @@ import { T } from '@tolgee/react';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
-import { Portal, Dialog, TextInput } from 'react-native-paper';
+import { Portal, TextInput } from 'react-native-paper';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 export default function RecordedExerciseNotesEditor(props: {
   exerciseName: string;
@@ -28,14 +29,14 @@ export default function RecordedExerciseNotesEditor(props: {
             pointerEvents: open ? 'box-none' : 'none',
           }}
         >
-          <Dialog visible={open} onDismiss={onDismiss}>
-            <Dialog.Title>
+          <GainsLabDialog visible={open} onDismiss={onDismiss}>
+            <GainsLabDialog.Title>
               <T
                 keyName="workout.notes_for.title"
                 params={{ name: exerciseName }}
               />
-            </Dialog.Title>
-            <Dialog.Content>
+            </GainsLabDialog.Title>
+            <GainsLabDialog.Content>
               <TextInput
                 defaultValue={editorNotes}
                 multiline
@@ -43,8 +44,8 @@ export default function RecordedExerciseNotesEditor(props: {
                 numberOfLines={6}
                 onChangeText={setEditorNotes}
               />
-            </Dialog.Content>
-            <Dialog.Actions>
+            </GainsLabDialog.Content>
+            <GainsLabDialog.Actions>
               <Button
                 testID="cancel-notes"
                 onPress={() => {
@@ -63,8 +64,8 @@ export default function RecordedExerciseNotesEditor(props: {
               >
                 <T keyName="generic.save.button" />
               </Button>
-            </Dialog.Actions>
-          </Dialog>
+            </GainsLabDialog.Actions>
+          </GainsLabDialog>
         </KeyboardAvoidingView>
       </Portal>
     )

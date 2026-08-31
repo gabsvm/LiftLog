@@ -36,10 +36,11 @@ import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Card, Menu, Text } from 'react-native-paper';
+import { Card, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { SharedSession } from '@/models/feed-models';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 export default function History() {
   const { t } = useTranslate();
@@ -331,7 +332,7 @@ function HistorySessionActions({
         onPress={onRepeat}
         accessibilityLabel={t('workout.start_this.button')}
       />
-      <Menu
+      <GainsLabMenu
         visible={menuVisible}
         onDismiss={() => setMenuVisible(false)}
         anchor={
@@ -344,7 +345,7 @@ function HistorySessionActions({
       >
         {menuVisible ? (
           <>
-            <Menu.Item
+            <GainsLabMenu.Item
               testID="history-edit-workout"
               leadingIcon="edit"
               title={t('workout.edit.button')}
@@ -353,7 +354,7 @@ function HistorySessionActions({
                 onEdit();
               }}
             />
-            <Menu.Item
+            <GainsLabMenu.Item
               leadingIcon="share"
               title={t('workout.share_workout.button')}
               onPress={() => {
@@ -361,7 +362,7 @@ function HistorySessionActions({
                 onShare();
               }}
             />
-            <Menu.Item
+            <GainsLabMenu.Item
               leadingIcon="delete"
               title={t('generic.delete.button')}
               onPress={() => {
@@ -371,7 +372,7 @@ function HistorySessionActions({
             />
           </>
         ) : null}
-      </Menu>
+      </GainsLabMenu>
     </CardActions>
   );
 }

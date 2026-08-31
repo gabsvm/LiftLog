@@ -12,11 +12,12 @@ import { T, useTranslate } from '@tolgee/react';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
-import { Card, Text, Dialog, Icon, List, Portal } from 'react-native-paper';
+import { Card, Text, Icon, List, Portal } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import * as Application from 'expo-application';
 import { useDispatch } from 'react-redux';
 import { copyLogs } from '@/store/app';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 export default function Settings() {
   const { t } = useTranslate();
@@ -178,11 +179,11 @@ export default function Settings() {
 
       {appInfoOpen ? (
         <Portal>
-          <Dialog visible onDismiss={() => setAppInfoOpen(false)}>
-            <Dialog.Title>
+          <GainsLabDialog visible onDismiss={() => setAppInfoOpen(false)}>
+            <GainsLabDialog.Title>
               <T keyName="settings.app_info.title" />
-            </Dialog.Title>
-            <Dialog.Content>
+            </GainsLabDialog.Title>
+            <GainsLabDialog.Content>
               <Text>{t('settings.app_info.subtitle')}</Text>
               <Text style={{ marginTop: spacing[3] }}>
                 LiftLog · AGPL-3.0 ·{' '}
@@ -197,13 +198,13 @@ export default function Settings() {
               <Text style={{ marginTop: spacing[2] }}>
                 GainsLab {appVersion}
               </Text>
-            </Dialog.Content>
-            <Dialog.Actions>
+            </GainsLabDialog.Content>
+            <GainsLabDialog.Actions>
               <Button onPress={() => setAppInfoOpen(false)}>
                 <T keyName="generic.close.button" />
               </Button>
-            </Dialog.Actions>
-          </Dialog>
+            </GainsLabDialog.Actions>
+          </GainsLabDialog>
         </Portal>
       ) : null}
     </FullHeightScrollView>

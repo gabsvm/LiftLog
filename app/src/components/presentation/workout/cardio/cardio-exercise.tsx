@@ -18,7 +18,7 @@ import { Duration, OffsetDateTime } from '@js-joda/core';
 import { View } from 'react-native';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import { rounding, spacing, useAppTheme } from '@/hooks/useAppTheme';
-import { Menu, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import BigNumber from 'bignumber.js';
 import { useAppSelector } from '@/store';
 import { isNotNullOrUndefinedOrFalse } from '@/utils/null';
@@ -34,6 +34,7 @@ import { Weight } from '@/models/weight';
 import { CardioWeightTracker } from '@/components/presentation/workout/cardio/cardio-weight-tracker';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
 import { CardioStepsTracker } from '@/components/presentation/workout/cardio/cardio-steps-tracker';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 type CardioExerciseSetCallback<T> = (value: T) => void;
 
@@ -230,7 +231,7 @@ function AddTrackerButtonMenu(props: {
     labelKey: TranslationKey,
     action: () => void,
   ) => (
-    <Menu.Item
+    <GainsLabMenu.Item
       key={name}
       title={t(labelKey)}
       testID={'add-tracker-menu-' + name}
@@ -280,7 +281,7 @@ function AddTrackerButtonMenu(props: {
     return undefined;
   }
   return (
-    <Menu
+    <GainsLabMenu
       visible={menuOpen}
       style={{ justifyContent: 'center' }}
       onDismiss={() => setMenuOpen(false)}
@@ -301,7 +302,7 @@ function AddTrackerButtonMenu(props: {
       }
     >
       {menuItems}
-    </Menu>
+    </GainsLabMenu>
   );
 }
 
@@ -316,7 +317,7 @@ function CardioDistanceTracker({
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialogValue, setDialogValue] = useState(distance);
   const getMenuItem = (unit: DistanceUnit) => (
-    <Menu.Item
+    <GainsLabMenu.Item
       key={unit}
       title={unit}
       onPress={() => {
@@ -340,7 +341,7 @@ function CardioDistanceTracker({
         value={dialogValue.value}
         onChange={(value) => setDialogValue((dv) => ({ ...dv, value }))}
       />
-      <Menu
+      <GainsLabMenu
         visible={menuOpen}
         onDismiss={() => setMenuOpen(false)}
         anchor={
@@ -357,7 +358,7 @@ function CardioDistanceTracker({
         {getMenuItem('metre')}
         {getMenuItem('mile')}
         {getMenuItem('yard')}
-      </Menu>
+      </GainsLabMenu>
     </CardioValueSelector>
   );
 }

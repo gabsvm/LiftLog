@@ -13,12 +13,13 @@ import {
 import FullScreenDialog from '@/components/presentation/foundation/full-screen-dialog';
 import { ExerciseEditor } from '@/components/presentation/workout-editor/exercise-editor';
 import { useAppSelector, useAppSelectorWithArg } from '@/store';
-import { Appbar, Menu, TextInput, Tooltip } from 'react-native-paper';
+import { Appbar, TextInput, Tooltip } from 'react-native-paper';
 import { Platform, View } from 'react-native';
 import { spacing } from '@/hooks/useAppTheme';
 import { Stack } from 'expo-router';
 import { Jiggler } from '@/components/presentation/foundation/jiggler';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 export default function SessionMoreMenuComponent(props: {
   target: SessionTarget;
@@ -205,7 +206,7 @@ function AndroidMenu(props: {
           <IconButton icon={'assignmentTurnedIn'} onPress={save} />
         </Tooltip>
       </Jiggler>
-      <Menu
+      <GainsLabMenu
         anchorPosition="bottom"
         onDismiss={() => setMenuOpen(false)}
         anchor={
@@ -217,7 +218,7 @@ function AndroidMenu(props: {
         }
         visible={menuOpen}
       >
-        <Menu.Item
+        <GainsLabMenu.Item
           onPress={() => {
             setExerciseEditorOpen(true);
             setEditingExerciseBlueprint(
@@ -229,7 +230,7 @@ function AndroidMenu(props: {
           leadingIcon={'add'}
           title={t('exercise.add.title')}
         />
-        <Menu.Item
+        <GainsLabMenu.Item
           onPress={() => {
             setWorkoutEditorOpen(true);
             setMenuOpen(false);
@@ -238,7 +239,7 @@ function AndroidMenu(props: {
           leadingIcon={'edit'}
           title={t('workout.edit.button')}
         />
-      </Menu>
+      </GainsLabMenu>
     </>
   );
 }

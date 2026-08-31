@@ -2,8 +2,9 @@ import { SurfaceText } from '@/components/presentation/foundation/surface-text';
 import { T } from '@tolgee/react';
 import { ReactNode } from 'react';
 import { View } from 'react-native';
-import { Dialog, Portal } from 'react-native-paper';
+import { Portal } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 type ConfirmationDialogWithoutAdditionalActionProps = {
   open: boolean;
@@ -57,7 +58,7 @@ export default function ConfirmationDialog(props: ConfirmationDialogProps) {
   );
 
   const buttons = additionalActionText ? (
-    <Dialog.Actions>
+    <GainsLabDialog.Actions>
       <View
         style={{
           flex: 1,
@@ -73,17 +74,17 @@ export default function ConfirmationDialog(props: ConfirmationDialogProps) {
           {okButton}
         </View>
       </View>
-    </Dialog.Actions>
+    </GainsLabDialog.Actions>
   ) : (
-    <Dialog.Actions>
+    <GainsLabDialog.Actions>
       {cancelButton}
       {okButton}
-    </Dialog.Actions>
+    </GainsLabDialog.Actions>
   );
 
   return (
     <Portal>
-      <Dialog
+      <GainsLabDialog
         visible={open}
         dismissable={!preventCancel}
         onDismiss={() => {
@@ -92,12 +93,12 @@ export default function ConfirmationDialog(props: ConfirmationDialogProps) {
           }
         }}
       >
-        <Dialog.Title>{headline}</Dialog.Title>
-        <Dialog.Content>
+        <GainsLabDialog.Title>{headline}</GainsLabDialog.Title>
+        <GainsLabDialog.Content>
           <SurfaceText>{textContent}</SurfaceText>
-        </Dialog.Content>
+        </GainsLabDialog.Content>
         {buttons}
-      </Dialog>
+      </GainsLabDialog>
     </Portal>
   );
 }

@@ -34,13 +34,14 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { ImpactFeedbackStyle, impactAsync } from 'expo-haptics';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Card, Menu, Text } from 'react-native-paper';
+import { Card, Text } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { useDispatch } from 'react-redux';
 import { MigrateToWeightUnitsWizard } from '@/components/smart/migrate-to-weight-units';
 import { WelcomeWizard } from '@/components/smart/welcome-wizard';
 import { SessionDiffSaveDialog } from '@/components/smart/session-diff-save-dialog';
 import { CurrentWorkoutReplacer } from '@/components/smart/current-workout-replacer';
+import { GainsLabMenu } from '@/components/presentation/foundation/gainslab-overlays';
 
 const HOME_MAINTENANCE_DELAY_MS = 450;
 
@@ -220,7 +221,7 @@ function ActiveWorkoutCard({
               {session.blueprint.name}
             </Text>
           </View>
-          <Menu
+          <GainsLabMenu
             visible={menuVisible}
             onDismiss={() => setMenuVisible(false)}
             anchor={
@@ -232,7 +233,7 @@ function ActiveWorkoutCard({
             }
           >
             {menuVisible ? (
-              <Menu.Item
+              <GainsLabMenu.Item
                 leadingIcon="delete"
                 title={t('generic.clear.button')}
                 onPress={() => {
@@ -241,7 +242,7 @@ function ActiveWorkoutCard({
                 }}
               />
             ) : null}
-          </Menu>
+          </GainsLabMenu>
         </View>
 
         <View style={styles.activeProgressHeader}>

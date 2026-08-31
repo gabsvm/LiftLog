@@ -7,9 +7,10 @@ import { T, useTranslate } from '@tolgee/react';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
-import { Dialog, List, Portal, RadioButton, Text } from 'react-native-paper';
+import { List, Portal, RadioButton, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 type CopyWorkoutDialogProps = {
   visible: boolean;
@@ -78,11 +79,11 @@ export default function CopyWorkoutDialog({
 
   return (
     <Portal>
-      <Dialog visible={visible} onDismiss={onDismiss}>
-        <Dialog.Title>
+      <GainsLabDialog visible={visible} onDismiss={onDismiss}>
+        <GainsLabDialog.Title>
           <T keyName="workout.copy_to_plan.button" />
-        </Dialog.Title>
-        <Dialog.Content>
+        </GainsLabDialog.Title>
+        <GainsLabDialog.Content>
           <View style={{ gap: spacing[2] }}>
             <Text variant="bodyMedium">
               <T
@@ -104,8 +105,8 @@ export default function CopyWorkoutDialog({
               </View>
             )}
           </View>
-        </Dialog.Content>
-        <Dialog.Actions>
+        </GainsLabDialog.Content>
+        <GainsLabDialog.Actions>
           <Button onPress={onDismiss}>
             <T keyName="generic.cancel.button" />
           </Button>
@@ -115,8 +116,8 @@ export default function CopyWorkoutDialog({
           >
             <T keyName="generic.copy.button" />
           </Button>
-        </Dialog.Actions>
-      </Dialog>
+        </GainsLabDialog.Actions>
+      </GainsLabDialog>
     </Portal>
   );
 }

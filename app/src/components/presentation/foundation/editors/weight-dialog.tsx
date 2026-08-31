@@ -10,7 +10,6 @@ import { View } from 'react-native';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import {
-  Dialog,
   Portal,
   Text,
   TextInput,
@@ -20,6 +19,7 @@ import {
 import { shortFormatWeightUnit, Weight, WeightUnit } from '@/models/weight';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
 
 type WeightDialogProps = {
   open: boolean;
@@ -123,11 +123,11 @@ export default function WeightDialog(props: WeightDialogProps) {
             pointerEvents: props.open ? 'box-none' : 'none',
           }}
         >
-          <Dialog visible={props.open} onDismiss={props.onClose}>
-            <Dialog.Title>
+          <GainsLabDialog visible={props.open} onDismiss={props.onClose}>
+            <GainsLabDialog.Title>
               {props.label ?? <T keyName="weight.weight.label" />}
-            </Dialog.Title>
-            <Dialog.Content>
+            </GainsLabDialog.Title>
+            <GainsLabDialog.Content>
               <View style={{ gap: spacing[2] }}>
                 <View
                   style={{
@@ -207,16 +207,16 @@ export default function WeightDialog(props: WeightDialogProps) {
                 </View>
                 {props.children}
               </View>
-            </Dialog.Content>
-            <Dialog.Actions>
+            </GainsLabDialog.Content>
+            <GainsLabDialog.Actions>
               <Button onPress={props.onClose} testID="close">
                 <T keyName="generic.close.button" />
               </Button>
               <Button onPress={onSaveClick} testID="save">
                 <T keyName="generic.save.button" />
               </Button>
-            </Dialog.Actions>
-          </Dialog>
+            </GainsLabDialog.Actions>
+          </GainsLabDialog>
         </KeyboardAvoidingView>
       </Portal>
     )
