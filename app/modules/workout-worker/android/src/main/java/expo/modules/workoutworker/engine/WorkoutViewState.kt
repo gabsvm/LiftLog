@@ -1,6 +1,6 @@
 package expo.modules.workoutworker.engine
 
-import java.time.OffsetDateTime
+import kotlin.time.Instant
 
 data class WorkoutViewSetState(
     val setIndex: Int,
@@ -161,7 +161,7 @@ data class WorkoutViewState(
         private fun latestEpochSecond(exercise: WorkoutEngineExerciseSnapshot): Long? =
             exercise.sets
                 .mapNotNull { set ->
-                    set.completionDateTime?.let { OffsetDateTime.parse(it).toEpochSecond() }
+                    set.completionDateTime?.let { Instant.parse(it).epochSeconds }
                 }
                 .maxOrNull()
 
