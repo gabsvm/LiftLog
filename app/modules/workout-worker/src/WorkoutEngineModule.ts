@@ -507,6 +507,9 @@ export type WorkoutEngineModuleEvents = {
 declare class WorkoutEngineNativeModule extends NativeModule<WorkoutEngineModuleEvents> {
   getSnapshot(snapshotJson: string): string;
   applyCommand(snapshotJson: string, commandJson: string): string;
+  writeSnapshot(key: string, snapshotJson: string): Promise<void>;
+  readSnapshot(key: string): Promise<string | null>;
+  removeSnapshot(key: string): Promise<void>;
 }
 
 let nativeModule: WorkoutEngineNativeModule | undefined;
@@ -542,4 +545,33 @@ export function applyNativeWorkoutEngineCommand(
       ),
     ) as unknown,
   );
+}
+
+export async function writeNativeWorkoutEngineSnapshot(
+  key: string,
+  snapshot: WorkoutEngineSnapshot,
+): Promise<boolean> {
+  const module = getNativeModule();
+  if (!module) return false;
+  await module.writeSnapshot(key, serializeWorkoutEngineSnapshot(snapshot));
+  return true;
+}
+
+export async function readNativeWorkoutEngineSnapshot(
+  key: string,
+): Promise<WorkoutEngineSnapshot | undefined> {
+  const module = getNativeModule();
+  if (!module) return undefined;
+  const snapshotJson = await module.readSnapshot(key);
+  if (snapshotJson === null) return undefined;
+  return parseWorkoutEngineSnapshot(JSON.parse(snapshotJson) as unknown);
+}
+
+export async function removeNativeWorkoutEngineSnapshot(
+  key: string,
+): Promise<boolean> {
+  const module = getNativeModule();
+  if (!module) return false;
+  await module.removeSnapshot(key);
+  return true;
 }
