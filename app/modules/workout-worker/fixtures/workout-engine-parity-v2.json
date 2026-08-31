@@ -1,0 +1,233 @@
+{
+  "initial": {
+    "schemaVersion": 2,
+    "sessionId": "session-parity",
+    "revision": 0,
+    "status": "active",
+    "exercises": [
+      {
+        "exerciseIndex": 0,
+        "type": "weighted",
+        "repsPerSet": 8,
+        "supersetWithNext": true,
+        "sets": [
+          {
+            "setIndex": 0,
+            "completed": false,
+            "reps": null,
+            "completionDateTime": null,
+            "weight": 80,
+            "weightUnit": "kilograms",
+            "durationSeconds": null,
+            "distanceValue": null,
+            "distanceUnit": null,
+            "resistance": null,
+            "incline": null,
+            "steps": null,
+            "currentBlockStartTime": null
+          },
+          {
+            "setIndex": 1,
+            "completed": false,
+            "reps": null,
+            "completionDateTime": null,
+            "weight": 80,
+            "weightUnit": "kilograms",
+            "durationSeconds": null,
+            "distanceValue": null,
+            "distanceUnit": null,
+            "resistance": null,
+            "incline": null,
+            "steps": null,
+            "currentBlockStartTime": null
+          },
+          {
+            "setIndex": 2,
+            "completed": false,
+            "reps": null,
+            "completionDateTime": null,
+            "weight": 80,
+            "weightUnit": "kilograms",
+            "durationSeconds": null,
+            "distanceValue": null,
+            "distanceUnit": null,
+            "resistance": null,
+            "incline": null,
+            "steps": null,
+            "currentBlockStartTime": null
+          }
+        ]
+      },
+      {
+        "exerciseIndex": 1,
+        "type": "cardio",
+        "repsPerSet": null,
+        "supersetWithNext": false,
+        "sets": [
+          {
+            "setIndex": 0,
+            "completed": true,
+            "reps": null,
+            "completionDateTime": "2026-08-31T14:55:00-03:00",
+            "weight": 20,
+            "weightUnit": "kilograms",
+            "durationSeconds": 300,
+            "distanceValue": 1.25,
+            "distanceUnit": "kilometre",
+            "resistance": 5,
+            "incline": 3,
+            "steps": 600,
+            "currentBlockStartTime": null
+          }
+        ]
+      }
+    ],
+    "restTimerEndTime": null,
+    "error": null
+  },
+  "commands": [
+    {
+      "schemaVersion": 2,
+      "sessionId": "session-parity",
+      "revision": 1,
+      "type": "toggle-set",
+      "exerciseIndex": 0,
+      "setIndex": 0,
+      "completionDateTime": "2026-08-31T15:00:00-03:00"
+    },
+    {
+      "schemaVersion": 2,
+      "sessionId": "session-parity",
+      "revision": 2,
+      "type": "toggle-set",
+      "exerciseIndex": 0,
+      "setIndex": 1,
+      "completionDateTime": "2026-08-31T15:01:00-03:00"
+    },
+    {
+      "schemaVersion": 2,
+      "sessionId": "session-parity",
+      "revision": 3,
+      "type": "update-weight",
+      "exerciseIndex": 0,
+      "setIndex": 0,
+      "weight": 82.5,
+      "weightUnit": "kilograms",
+      "applyTo": "allSets"
+    },
+    {
+      "schemaVersion": 2,
+      "sessionId": "session-parity",
+      "revision": 4,
+      "type": "update-reps",
+      "exerciseIndex": 0,
+      "setIndex": 1,
+      "reps": 6,
+      "completionDateTime": "2026-08-31T15:02:00-03:00"
+    },
+    {
+      "schemaVersion": 2,
+      "sessionId": "session-parity",
+      "revision": 5,
+      "type": "update-weight",
+      "exerciseIndex": 0,
+      "setIndex": 2,
+      "weight": 85,
+      "weightUnit": "kilograms",
+      "applyTo": "uncompletedSets"
+    },
+    {
+      "schemaVersion": 2,
+      "sessionId": "session-parity",
+      "revision": 6,
+      "type": "start-rest",
+      "endTime": 1788203100
+    }
+  ],
+  "expected": {
+    "schemaVersion": 2,
+    "sessionId": "session-parity",
+    "revision": 6,
+    "status": "active",
+    "exercises": [
+      {
+        "exerciseIndex": 0,
+        "type": "weighted",
+        "repsPerSet": 8,
+        "supersetWithNext": true,
+        "sets": [
+          {
+            "setIndex": 0,
+            "completed": true,
+            "reps": 8,
+            "completionDateTime": "2026-08-31T15:00:00-03:00",
+            "weight": 82.5,
+            "weightUnit": "kilograms",
+            "durationSeconds": null,
+            "distanceValue": null,
+            "distanceUnit": null,
+            "resistance": null,
+            "incline": null,
+            "steps": null,
+            "currentBlockStartTime": null
+          },
+          {
+            "setIndex": 1,
+            "completed": true,
+            "reps": 6,
+            "completionDateTime": "2026-08-31T15:02:00-03:00",
+            "weight": 82.5,
+            "weightUnit": "kilograms",
+            "durationSeconds": null,
+            "distanceValue": null,
+            "distanceUnit": null,
+            "resistance": null,
+            "incline": null,
+            "steps": null,
+            "currentBlockStartTime": null
+          },
+          {
+            "setIndex": 2,
+            "completed": false,
+            "reps": null,
+            "completionDateTime": null,
+            "weight": 85,
+            "weightUnit": "kilograms",
+            "durationSeconds": null,
+            "distanceValue": null,
+            "distanceUnit": null,
+            "resistance": null,
+            "incline": null,
+            "steps": null,
+            "currentBlockStartTime": null
+          }
+        ]
+      },
+      {
+        "exerciseIndex": 1,
+        "type": "cardio",
+        "repsPerSet": null,
+        "supersetWithNext": false,
+        "sets": [
+          {
+            "setIndex": 0,
+            "completed": true,
+            "reps": null,
+            "completionDateTime": "2026-08-31T14:55:00-03:00",
+            "weight": 20,
+            "weightUnit": "kilograms",
+            "durationSeconds": 300,
+            "distanceValue": 1.25,
+            "distanceUnit": "kilometre",
+            "resistance": 5,
+            "incline": 3,
+            "steps": 600,
+            "currentBlockStartTime": null
+          }
+        ]
+      }
+    ],
+    "restTimerEndTime": 1788203100,
+    "error": null
+  }
+}
