@@ -9,7 +9,7 @@ class WorkoutViewStateTest {
     fun `maps the engine snapshot into stable workout display state`() {
         val state = WorkoutViewState.fromSnapshot(
             WorkoutEngineSnapshot(
-                schemaVersion = 1,
+                schemaVersion = 2,
                 sessionId = "session-1",
                 revision = 3,
                 status = "active",
@@ -20,7 +20,7 @@ class WorkoutViewStateTest {
                         repsPerSet = 8,
                         supersetWithNext = true,
                         sets = listOf(
-                            WorkoutEngineSetSnapshot(0, true, 8, 80.0, "kilograms"),
+                            WorkoutEngineSetSnapshot(0, true, 8, 80.0, "kilograms", completionDateTime = "2026-08-31T15:00:00-03:00"),
                             WorkoutEngineSetSnapshot(1, false, null, 80.0, "kilograms"),
                         ),
                     ),
