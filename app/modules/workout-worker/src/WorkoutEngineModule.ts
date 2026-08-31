@@ -1,16 +1,34 @@
 import { NativeModule, requireNativeModule } from 'expo';
 import { Platform } from 'react-native';
 
-export const WORKOUT_ENGINE_SCHEMA_VERSION = 1 as const;
+export const WORKOUT_ENGINE_SCHEMA_VERSION = 2 as const;
 
 export type WorkoutEngineExerciseType = 'weighted' | 'cardio';
+export type WorkoutEngineWeightAppliesTo =
+  | 'thisSet'
+  | 'uncompletedSets'
+  | 'allSets';
 
+/**
+ * Version 2 intentionally carries every set field needed to round-trip the
+ * current React Native session model without inventing programming semantics
+ * inside Kotlin. Weighted commands mutate only weighted fields; cardio fields
+ * are preserved until a later parity gate adds native cardio commands.
+ */
 export type WorkoutEngineSetSnapshot = {
   setIndex: number;
   completed: boolean;
   reps: number | null;
+  completionDateTime: string | null;
   weight: number | null;
   weightUnit: string | null;
+  durationSeconds: number | null;
+  distanceValue: number | null;
+  distanceUnit: string | null;
+  resistance: number | null;
+  incline: number | null;
+  steps: number | null;
+  currentBlockStartTime: string | null;
 };
 
 export type WorkoutEngineExerciseSnapshot = {
@@ -32,6 +50,7 @@ export type WorkoutEngineSnapshot = {
   revision: number;
   status: 'active' | 'finished';
   exercises: WorkoutEngineExerciseSnapshot[];
+  /** Epoch seconds, matching the existing worker/event contract. */
   restTimerEndTime: number | null;
   error: WorkoutEngineError | null;
 };
@@ -47,12 +66,14 @@ export type WorkoutEngineCommand =
       type: 'toggle-set';
       exerciseIndex: number;
       setIndex: number;
+      completionDateTime: string;
     })
   | (WorkoutEngineCommandBase & {
       type: 'update-reps';
       exerciseIndex: number;
       setIndex: number;
-      reps: number;
+      reps: number | null;
+      completionDateTime: string | null;
     })
   | (WorkoutEngineCommandBase & {
       type: 'update-weight';
@@ -60,6 +81,7 @@ export type WorkoutEngineCommand =
       setIndex: number;
       weight: number;
       weightUnit: string;
+      applyTo: WorkoutEngineWeightAppliesTo;
     })
   | (WorkoutEngineCommandBase & {
       type: 'start-rest';
@@ -89,45 +111,72 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function requireString(value: unknown, field: string): string {
+function snapshotError(message: string): never {
+  throw new WorkoutEngineCommandError('invalid_snapshot', message);
+}
+
+function commandError(message: string): never {
+  throw new WorkoutEngineCommandError('invalid_command', message);
+}
+
+function requireString(
+  value: unknown,
+  field: string,
+  code: 'invalid_snapshot' | 'invalid_command' = 'invalid_snapshot',
+): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      `${field} must be a non-empty string`,
-    );
+    throw new WorkoutEngineCommandError(code, `${field} must be a non-empty string`);
   }
   return value;
 }
 
-function requireFiniteNumber(value: unknown, field: string): number {
+function requireNullableString(value: unknown, field: string): string | null {
+  return value === null ? null : requireString(value, field);
+}
+
+function requireFiniteNumber(
+  value: unknown,
+  field: string,
+  code: 'invalid_snapshot' | 'invalid_command' = 'invalid_snapshot',
+): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      `${field} must be a finite number`,
-    );
+    throw new WorkoutEngineCommandError(code, `${field} must be a finite number`);
   }
   return value;
 }
 
-function requireNonNegativeInteger(value: unknown, field: string): number {
-  const number = requireFiniteNumber(value, field);
+function requireNullableFiniteNumber(
+  value: unknown,
+  field: string,
+): number | null {
+  return value === null ? null : requireFiniteNumber(value, field);
+}
+
+function requireNonNegativeInteger(
+  value: unknown,
+  field: string,
+  code: 'invalid_snapshot' | 'invalid_command' = 'invalid_snapshot',
+): number {
+  const number = requireFiniteNumber(value, field, code);
   if (!Number.isInteger(number) || number < 0) {
     throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
+      code,
       `${field} must be a non-negative integer`,
     );
   }
   return number;
 }
 
+function requireNullableNonNegativeInteger(
+  value: unknown,
+  field: string,
+): number | null {
+  return value === null ? null : requireNonNegativeInteger(value, field);
+}
+
 function parseError(value: unknown): WorkoutEngineError | null {
   if (value === null) return null;
-  if (!isRecord(value)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'error must be null or an object',
-    );
-  }
+  if (!isRecord(value)) snapshotError('error must be null or an object');
   return {
     code: requireString(value.code, 'error.code'),
     message: requireString(value.message, 'error.message'),
@@ -136,64 +185,60 @@ function parseError(value: unknown): WorkoutEngineError | null {
 
 function parseSet(value: unknown, index: number): WorkoutEngineSetSnapshot {
   if (!isRecord(value)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      `exercises[*].sets[${index}] must be an object`,
-    );
+    snapshotError(`exercises[*].sets[${index}] must be an object`);
   }
   const setIndex = requireNonNegativeInteger(value.setIndex, 'setIndex');
+  if (setIndex !== index) snapshotError('setIndex must match its position');
   if (typeof value.completed !== 'boolean') {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'set.completed must be a boolean',
-    );
+    snapshotError('set.completed must be a boolean');
   }
-  const reps = value.reps === null ? null : requireNonNegativeInteger(value.reps, 'reps');
-  const weight =
-    value.weight === null ? null : requireFiniteNumber(value.weight, 'weight');
-  const weightUnit =
-    value.weightUnit === null
-      ? null
-      : requireString(value.weightUnit, 'weightUnit');
-  return { setIndex, completed: value.completed, reps, weight, weightUnit };
+  return {
+    setIndex,
+    completed: value.completed,
+    reps: requireNullableNonNegativeInteger(value.reps, 'reps'),
+    completionDateTime: requireNullableString(
+      value.completionDateTime,
+      'completionDateTime',
+    ),
+    weight: requireNullableFiniteNumber(value.weight, 'weight'),
+    weightUnit: requireNullableString(value.weightUnit, 'weightUnit'),
+    durationSeconds: requireNullableFiniteNumber(
+      value.durationSeconds,
+      'durationSeconds',
+    ),
+    distanceValue: requireNullableFiniteNumber(value.distanceValue, 'distanceValue'),
+    distanceUnit: requireNullableString(value.distanceUnit, 'distanceUnit'),
+    resistance: requireNullableFiniteNumber(value.resistance, 'resistance'),
+    incline: requireNullableFiniteNumber(value.incline, 'incline'),
+    steps: requireNullableNonNegativeInteger(value.steps, 'steps'),
+    currentBlockStartTime: requireNullableString(
+      value.currentBlockStartTime,
+      'currentBlockStartTime',
+    ),
+  };
 }
 
 function parseExercise(
   value: unknown,
   index: number,
 ): WorkoutEngineExerciseSnapshot {
-  if (!isRecord(value)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      `exercises[${index}] must be an object`,
-    );
-  }
+  if (!isRecord(value)) snapshotError(`exercises[${index}] must be an object`);
   const exerciseIndex = requireNonNegativeInteger(
     value.exerciseIndex,
     'exerciseIndex',
   );
+  if (exerciseIndex !== index) snapshotError('exerciseIndex must match its position');
   if (value.type !== 'weighted' && value.type !== 'cardio') {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'exercise.type must be weighted or cardio',
-    );
+    snapshotError('exercise.type must be weighted or cardio');
   }
   const repsPerSet =
     value.repsPerSet === null
       ? null
       : requireNonNegativeInteger(value.repsPerSet, 'repsPerSet');
   if (typeof value.supersetWithNext !== 'boolean') {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'exercise.supersetWithNext must be a boolean',
-    );
+    snapshotError('exercise.supersetWithNext must be a boolean');
   }
-  if (!Array.isArray(value.sets)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'exercise.sets must be an array',
-    );
-  }
+  if (!Array.isArray(value.sets)) snapshotError('exercise.sets must be an array');
   return {
     exerciseIndex,
     type: value.type,
@@ -206,31 +251,15 @@ function parseExercise(
 export function parseWorkoutEngineSnapshot(
   value: unknown,
 ): WorkoutEngineSnapshot {
-  if (!isRecord(value)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'snapshot must be an object',
-    );
-  }
+  if (!isRecord(value)) snapshotError('snapshot must be an object');
   if (value.schemaVersion !== WORKOUT_ENGINE_SCHEMA_VERSION) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      `unsupported schemaVersion: ${String(value.schemaVersion)}`,
-    );
+    snapshotError(`unsupported schemaVersion: ${String(value.schemaVersion)}`);
   }
   const revision = requireNonNegativeInteger(value.revision, 'revision');
   if (value.status !== 'active' && value.status !== 'finished') {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'status must be active or finished',
-    );
+    snapshotError('status must be active or finished');
   }
-  if (!Array.isArray(value.exercises)) {
-    throw new WorkoutEngineCommandError(
-      'invalid_snapshot',
-      'exercises must be an array',
-    );
-  }
+  if (!Array.isArray(value.exercises)) snapshotError('exercises must be an array');
   const restTimerEndTime =
     value.restTimerEndTime === null
       ? null
@@ -253,23 +282,32 @@ export function serializeWorkoutEngineSnapshot(
 }
 
 function parseCommandIndex(value: number, field: string): number {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new WorkoutEngineCommandError(
-      'invalid_command',
-      `${field} must be a non-negative integer`,
-    );
-  }
+  if (!Number.isInteger(value) || value < 0) commandError(`${field} must be a non-negative integer`);
   return value;
 }
 
-function getSet(
+function getWeightedExercise(
+  snapshot: WorkoutEngineSnapshot,
+  exerciseIndex: number,
+): WorkoutEngineExerciseSnapshot {
+  const exercise = snapshot.exercises[exerciseIndex];
+  if (!exercise || exercise.type !== 'weighted' || exercise.repsPerSet === null) {
+    throw new WorkoutEngineCommandError(
+      'invalid_target',
+      `weighted exercise ${exerciseIndex} does not exist`,
+    );
+  }
+  return exercise;
+}
+
+function getWeightedSet(
   snapshot: WorkoutEngineSnapshot,
   exerciseIndex: number,
   setIndex: number,
 ): WorkoutEngineSetSnapshot {
-  const exercise = snapshot.exercises[exerciseIndex];
-  const set = exercise?.sets[setIndex];
-  if (!exercise || !set) {
+  const exercise = getWeightedExercise(snapshot, exerciseIndex);
+  const set = exercise.sets[setIndex];
+  if (!set) {
     throw new WorkoutEngineCommandError(
       'invalid_target',
       `set ${exerciseIndex}:${setIndex} does not exist`,
@@ -278,27 +316,34 @@ function getSet(
   return set;
 }
 
-function withUpdatedSet(
+function withUpdatedWeightedExercise(
+  snapshot: WorkoutEngineSnapshot,
+  exerciseIndex: number,
+  update: (exercise: WorkoutEngineExerciseSnapshot) => WorkoutEngineExerciseSnapshot,
+): WorkoutEngineSnapshot {
+  const target = getWeightedExercise(snapshot, exerciseIndex);
+  return {
+    ...snapshot,
+    error: null,
+    exercises: snapshot.exercises.map((exercise, index) =>
+      index === exerciseIndex ? update(target) : exercise,
+    ),
+  };
+}
+
+function withUpdatedWeightedSet(
   snapshot: WorkoutEngineSnapshot,
   exerciseIndex: number,
   setIndex: number,
   update: (set: WorkoutEngineSetSnapshot) => WorkoutEngineSetSnapshot,
 ): WorkoutEngineSnapshot {
-  getSet(snapshot, exerciseIndex, setIndex);
-  return {
-    ...snapshot,
-    error: null,
-    exercises: snapshot.exercises.map((exercise, currentExerciseIndex) =>
-      currentExerciseIndex !== exerciseIndex
-        ? exercise
-        : {
-            ...exercise,
-            sets: exercise.sets.map((set, currentSetIndex) =>
-              currentSetIndex === setIndex ? update(set) : set,
-            ),
-          },
+  getWeightedSet(snapshot, exerciseIndex, setIndex);
+  return withUpdatedWeightedExercise(snapshot, exerciseIndex, (exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set, index) =>
+      index === setIndex ? update(set) : set,
     ),
-  };
+  }));
 }
 
 export function applyWorkoutEngineCommand(
@@ -306,31 +351,24 @@ export function applyWorkoutEngineCommand(
   command: WorkoutEngineCommand,
 ): WorkoutEngineSnapshot {
   const current = parseWorkoutEngineSnapshot(snapshot);
-  if (command.schemaVersion !== WORKOUT_ENGINE_SCHEMA_VERSION) {
-    throw new WorkoutEngineCommandError(
-      'invalid_command',
-      `unsupported schemaVersion: ${String(command.schemaVersion)}`,
-    );
-  }
-  if (command.sessionId !== current.sessionId) {
+  const parsedCommand = parseWorkoutEngineCommand(command);
+  if (parsedCommand.sessionId !== current.sessionId) {
     throw new WorkoutEngineCommandError(
       'session_mismatch',
       'command sessionId does not match the snapshot',
     );
   }
-  if (command.revision < current.revision) {
+  if (parsedCommand.revision < current.revision) {
     throw new WorkoutEngineCommandError(
       'stale_revision',
-      `command revision ${command.revision} is older than ${current.revision}`,
+      `command revision ${parsedCommand.revision} is older than ${current.revision}`,
     );
   }
-  if (command.revision === current.revision) {
-    return current;
-  }
-  if (command.revision !== current.revision + 1) {
+  if (parsedCommand.revision === current.revision) return current;
+  if (parsedCommand.revision !== current.revision + 1) {
     throw new WorkoutEngineCommandError(
       'revision_gap',
-      `expected revision ${current.revision + 1}, received ${command.revision}`,
+      `expected revision ${current.revision + 1}, received ${parsedCommand.revision}`,
     );
   }
   if (current.status === 'finished') {
@@ -341,82 +379,91 @@ export function applyWorkoutEngineCommand(
   }
 
   const next: WorkoutEngineSnapshot = (() => {
-    switch (command.type) {
+    switch (parsedCommand.type) {
       case 'toggle-set': {
         const exerciseIndex = parseCommandIndex(
-          command.exerciseIndex,
+          parsedCommand.exerciseIndex,
           'exerciseIndex',
         );
-        const setIndex = parseCommandIndex(command.setIndex, 'setIndex');
-        const exercise = current.exercises[exerciseIndex];
-        const set = getSet(current, exerciseIndex, setIndex);
-        if (exercise?.type === 'weighted' && exercise.repsPerSet !== null) {
-          const nextSet = !set.completed
-            ? { ...set, completed: true, reps: exercise.repsPerSet }
-            : set.reps === 0
-              ? { ...set, completed: false, reps: null }
-              : {
-                  ...set,
-                  completed: true,
-                  reps: Math.max(0, (set.reps ?? exercise.repsPerSet) - 1),
-                };
-          return withUpdatedSet(current, exerciseIndex, setIndex, () => nextSet);
-        }
-        return withUpdatedSet(current, exerciseIndex, setIndex, (currentSet) => ({
-          ...currentSet,
-          completed: !currentSet.completed,
-        }));
+        const setIndex = parseCommandIndex(parsedCommand.setIndex, 'setIndex');
+        const exercise = getWeightedExercise(current, exerciseIndex);
+        const set = getWeightedSet(current, exerciseIndex, setIndex);
+        return withUpdatedWeightedSet(current, exerciseIndex, setIndex, () => {
+          if (!set.completed) {
+            return {
+              ...set,
+              completed: true,
+              reps: exercise.repsPerSet,
+              completionDateTime: parsedCommand.completionDateTime,
+            };
+          }
+          if (set.reps === 0) {
+            return {
+              ...set,
+              completed: false,
+              reps: null,
+              completionDateTime: null,
+            };
+          }
+          return {
+            ...set,
+            completed: true,
+            reps: Math.max(0, (set.reps ?? exercise.repsPerSet) - 1),
+          };
+        });
       }
       case 'update-reps': {
         const exerciseIndex = parseCommandIndex(
-          command.exerciseIndex,
+          parsedCommand.exerciseIndex,
           'exerciseIndex',
         );
-        const setIndex = parseCommandIndex(command.setIndex, 'setIndex');
-        if (!Number.isInteger(command.reps) || command.reps < 0) {
-          throw new WorkoutEngineCommandError(
-            'invalid_command',
-            'reps must be a non-negative integer',
-          );
-        }
-        return withUpdatedSet(current, exerciseIndex, setIndex, (set) => ({
-          ...set,
-          completed: true,
-          reps: command.reps,
-        }));
+        const setIndex = parseCommandIndex(parsedCommand.setIndex, 'setIndex');
+        return withUpdatedWeightedSet(current, exerciseIndex, setIndex, (set) =>
+          parsedCommand.reps === null
+            ? {
+                ...set,
+                completed: false,
+                reps: null,
+                completionDateTime: null,
+              }
+            : {
+                ...set,
+                completed: true,
+                reps: parsedCommand.reps,
+                completionDateTime: parsedCommand.completionDateTime,
+              },
+        );
       }
       case 'update-weight': {
         const exerciseIndex = parseCommandIndex(
-          command.exerciseIndex,
+          parsedCommand.exerciseIndex,
           'exerciseIndex',
         );
-        const setIndex = parseCommandIndex(command.setIndex, 'setIndex');
-        if (!Number.isFinite(command.weight) || command.weight < 0) {
-          throw new WorkoutEngineCommandError(
-            'invalid_command',
-            'weight must be a non-negative finite number',
-          );
-        }
-        if (!command.weightUnit) {
-          throw new WorkoutEngineCommandError(
-            'invalid_command',
-            'weightUnit must be a non-empty string',
-          );
-        }
-        return withUpdatedSet(current, exerciseIndex, setIndex, (set) => ({
-          ...set,
-          weight: command.weight,
-          weightUnit: command.weightUnit,
+        parseCommandIndex(parsedCommand.setIndex, 'setIndex');
+        getWeightedSet(current, exerciseIndex, parsedCommand.setIndex);
+        return withUpdatedWeightedExercise(current, exerciseIndex, (exercise) => ({
+          ...exercise,
+          sets: exercise.sets.map((set, index) => {
+            const applies =
+              parsedCommand.applyTo === 'allSets' ||
+              (parsedCommand.applyTo === 'thisSet' && index === parsedCommand.setIndex) ||
+              (parsedCommand.applyTo === 'uncompletedSets' && !set.completed);
+            return applies
+              ? {
+                  ...set,
+                  weight: parsedCommand.weight,
+                  weightUnit: parsedCommand.weightUnit,
+                }
+              : set;
+          }),
         }));
       }
       case 'start-rest':
-        if (!Number.isFinite(command.endTime) || command.endTime <= 0) {
-          throw new WorkoutEngineCommandError(
-            'invalid_command',
-            'endTime must be a positive finite number',
-          );
-        }
-        return { ...current, restTimerEndTime: command.endTime, error: null };
+        return {
+          ...current,
+          restTimerEndTime: parsedCommand.endTime,
+          error: null,
+        };
       case 'reset-rest':
         return { ...current, restTimerEndTime: null, error: null };
       case 'finish':
@@ -429,74 +476,137 @@ export function applyWorkoutEngineCommand(
     }
   })();
 
-  return { ...next, revision: command.revision };
+  return { ...next, revision: parsedCommand.revision };
+}
+
+function parseNullableCommandReps(value: unknown): number | null {
+  return value === null
+    ? null
+    : requireNonNegativeInteger(value, 'reps', 'invalid_command');
+}
+
+function parseWeightAppliesTo(value: unknown): WorkoutEngineWeightAppliesTo {
+  if (
+    value !== 'thisSet' &&
+    value !== 'uncompletedSets' &&
+    value !== 'allSets'
+  ) {
+    commandError('applyTo must be thisSet, uncompletedSets or allSets');
+  }
+  return value;
 }
 
 export function parseWorkoutEngineCommand(value: unknown): WorkoutEngineCommand {
-  if (!isRecord(value)) {
-    throw new WorkoutEngineCommandError('invalid_command', 'command must be an object');
-  }
+  if (!isRecord(value)) commandError('command must be an object');
   if (value.schemaVersion !== WORKOUT_ENGINE_SCHEMA_VERSION) {
-    throw new WorkoutEngineCommandError(
-      'invalid_command',
-      `unsupported schemaVersion: ${String(value.schemaVersion)}`,
-    );
+    commandError(`unsupported schemaVersion: ${String(value.schemaVersion)}`);
   }
-  const sessionId = requireString(value.sessionId, 'sessionId');
-  const revision = requireNonNegativeInteger(value.revision, 'revision');
-  if (typeof value.type !== 'string') {
-    throw new WorkoutEngineCommandError('invalid_command', 'type is required');
-  }
+  const sessionId = requireString(
+    value.sessionId,
+    'sessionId',
+    'invalid_command',
+  );
+  const revision = requireNonNegativeInteger(
+    value.revision,
+    'revision',
+    'invalid_command',
+  );
+  if (typeof value.type !== 'string') commandError('type is required');
+  const common = {
+    schemaVersion: WORKOUT_ENGINE_SCHEMA_VERSION,
+    sessionId,
+    revision,
+  } as const;
+
   switch (value.type) {
     case 'toggle-set':
-    case 'update-reps':
-    case 'update-weight': {
-      const exerciseIndex = requireNonNegativeInteger(
-        value.exerciseIndex,
-        'exerciseIndex',
-      );
-      const setIndex = requireNonNegativeInteger(value.setIndex, 'setIndex');
-      if (value.type === 'toggle-set') {
-        return { schemaVersion: 1, sessionId, revision, type: value.type, exerciseIndex, setIndex };
+      return {
+        ...common,
+        type: value.type,
+        exerciseIndex: requireNonNegativeInteger(
+          value.exerciseIndex,
+          'exerciseIndex',
+          'invalid_command',
+        ),
+        setIndex: requireNonNegativeInteger(
+          value.setIndex,
+          'setIndex',
+          'invalid_command',
+        ),
+        completionDateTime: requireString(
+          value.completionDateTime,
+          'completionDateTime',
+          'invalid_command',
+        ),
+      };
+    case 'update-reps': {
+      const reps = parseNullableCommandReps(value.reps);
+      const completionDateTime =
+        value.completionDateTime === null
+          ? null
+          : requireString(
+              value.completionDateTime,
+              'completionDateTime',
+              'invalid_command',
+            );
+      if (reps !== null && completionDateTime === null) {
+        commandError('completionDateTime is required when reps is recorded');
       }
-      if (value.type === 'update-reps') {
-        return {
-          schemaVersion: 1,
-          sessionId,
-          revision,
-          type: value.type,
-          exerciseIndex,
-          setIndex,
-          reps: requireNonNegativeInteger(value.reps, 'reps'),
-        };
+      if (reps === null && completionDateTime !== null) {
+        commandError('completionDateTime must be null when reps is cleared');
       }
       return {
-        schemaVersion: 1,
-        sessionId,
-        revision,
+        ...common,
         type: value.type,
-        exerciseIndex,
-        setIndex,
-        weight: requireFiniteNumber(value.weight, 'weight'),
-        weightUnit: requireString(value.weightUnit, 'weightUnit'),
+        exerciseIndex: requireNonNegativeInteger(
+          value.exerciseIndex,
+          'exerciseIndex',
+          'invalid_command',
+        ),
+        setIndex: requireNonNegativeInteger(
+          value.setIndex,
+          'setIndex',
+          'invalid_command',
+        ),
+        reps,
+        completionDateTime,
       };
     }
-    case 'start-rest':
+    case 'update-weight': {
+      const weight = requireFiniteNumber(value.weight, 'weight', 'invalid_command');
+      if (weight < 0) commandError('weight must be non-negative');
       return {
-        schemaVersion: 1,
-        sessionId,
-        revision,
+        ...common,
         type: value.type,
-        endTime: requireFiniteNumber(value.endTime, 'endTime'),
+        exerciseIndex: requireNonNegativeInteger(
+          value.exerciseIndex,
+          'exerciseIndex',
+          'invalid_command',
+        ),
+        setIndex: requireNonNegativeInteger(
+          value.setIndex,
+          'setIndex',
+          'invalid_command',
+        ),
+        weight,
+        weightUnit: requireString(
+          value.weightUnit,
+          'weightUnit',
+          'invalid_command',
+        ),
+        applyTo: parseWeightAppliesTo(value.applyTo),
       };
+    }
+    case 'start-rest': {
+      const endTime = requireFiniteNumber(value.endTime, 'endTime', 'invalid_command');
+      if (endTime <= 0) commandError('endTime must be positive');
+      return { ...common, type: value.type, endTime };
+    }
     case 'reset-rest':
     case 'finish':
-      return { schemaVersion: 1, sessionId, revision, type: value.type };
+      return { ...common, type: value.type };
     default:
-      throw new WorkoutEngineCommandError(
-        'invalid_command',
-        `unsupported command type: ${value.type}`,
-      );
+      commandError(`unsupported command type: ${value.type}`);
   }
 }
 
@@ -535,13 +645,14 @@ export function applyNativeWorkoutEngineCommand(
   snapshot: WorkoutEngineSnapshot,
   command: WorkoutEngineCommand,
 ): WorkoutEngineSnapshot {
+  const parsedCommand = parseWorkoutEngineCommand(command);
   const module = getNativeModule();
-  if (!module) return applyWorkoutEngineCommand(snapshot, command);
+  if (!module) return applyWorkoutEngineCommand(snapshot, parsedCommand);
   return parseWorkoutEngineSnapshot(
     JSON.parse(
       module.applyCommand(
         serializeWorkoutEngineSnapshot(snapshot),
-        JSON.stringify(command),
+        JSON.stringify(parsedCommand),
       ),
     ) as unknown,
   );
