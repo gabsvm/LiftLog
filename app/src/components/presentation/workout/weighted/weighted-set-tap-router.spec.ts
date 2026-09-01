@@ -10,6 +10,16 @@ import { routeWeightedSetTap } from './weighted-set-tap-router';
 
 const TIME = OffsetDateTime.parse('2026-08-31T15:00:00-03:00');
 
+type CommitExerciseUpdate = (
+  exercise: RecordedWeightedExercise,
+  options?: { resetTimer?: boolean },
+) => void;
+
+type NativeCycle = (
+  setIndex: number,
+  time: OffsetDateTime,
+) => RecordedWeightedExercise | undefined;
+
 function exerciseFixture(): RecordedWeightedExercise {
   const blueprint = WeightedExerciseBlueprint.empty().with({
     name: 'Bench',
@@ -30,8 +40,8 @@ describe('weighted set tap router', () => {
   it('routes the tap only to native and returns its reconciled exercise snapshot', () => {
     const exercise = exerciseFixture();
     const nativeExercise = exercise.withCycledRepCount(0, TIME);
-    const nativeCycle = vi.fn(() => nativeExercise);
-    const commitExerciseUpdate = vi.fn();
+    const nativeCycle = vi.fn<NativeCycle>(() => nativeExercise);
+    const commitExerciseUpdate = vi.fn<CommitExerciseUpdate>();
 
     const interactionExercise = routeWeightedSetTap({
       index: 0,
@@ -49,7 +59,7 @@ describe('weighted set tap router', () => {
 
   it('preserves the existing RN writer and returns its optimistic snapshot', () => {
     const exercise = exerciseFixture();
-    const commitExerciseUpdate = vi.fn();
+    const commitExerciseUpdate = vi.fn<CommitExerciseUpdate>();
 
     const interactionExercise = routeWeightedSetTap({
       index: 0,
