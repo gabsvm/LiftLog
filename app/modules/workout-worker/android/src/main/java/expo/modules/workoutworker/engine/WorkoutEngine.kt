@@ -102,7 +102,7 @@ object WorkoutEngine {
     @OptIn(ExperimentalStdlibApi::class)
     fun encodeSnapshot(snapshot: WorkoutEngineSnapshot): String {
         validateSnapshot(snapshot)
-        return Json.moshi.adapter<WorkoutEngineSnapshot>().toJson(snapshot)
+        return Json.moshi.adapter<WorkoutEngineSnapshot>().serializeNulls().toJson(snapshot)
     }
 
     fun applyJson(snapshotJson: String, commandJson: String): String =
