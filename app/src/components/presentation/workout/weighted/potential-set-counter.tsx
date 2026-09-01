@@ -7,7 +7,7 @@ import {
   Chip,
   TouchableRipple as PaperTouchableRipple,
 } from 'react-native-paper';
-import { Text, View, type TextStyle } from 'react-native';
+import { Text, View, type ViewStyle } from 'react-native';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
 import WeightDialog from '@/components/presentation/foundation/editors/weight-dialog';
 import { useAppTheme, spacing, font, rounding } from '@/hooks/useAppTheme';
@@ -17,7 +17,7 @@ import { Weight } from '@/models/weight';
 import PotentialSetAdditionalActionsDialog from '@/components/presentation/workout/weighted/potential-sets-addition-actions-dialog';
 import Icon from '@/components/presentation/foundation/gesture-wrappers/icon';
 
-const noTextSelectionStyle: TextStyle = { userSelect: 'none' };
+const noTextSelectionStyle: ViewStyle = { userSelect: 'none' };
 
 interface PotentialSetCounterProps {
   set: PotentialSet;
