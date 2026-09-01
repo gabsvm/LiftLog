@@ -7,7 +7,7 @@ import {
   Chip,
   TouchableRipple as PaperTouchableRipple,
 } from 'react-native-paper';
-import { Text, View, type ViewStyle } from 'react-native';
+import { Text, View } from 'react-native';
 import WeightFormat from '@/components/presentation/foundation/weight-format';
 import WeightDialog from '@/components/presentation/foundation/editors/weight-dialog';
 import { useAppTheme, spacing, font, rounding } from '@/hooks/useAppTheme';
@@ -48,7 +48,7 @@ export default function PotentialSetCounter(props: PotentialSetCounterProps) {
           {
             minWidth: spacing[15],
           },
-          { userSelect: 'none' } as unknown as ViewStyle,
+          { userSelect: 'none' },
         ]}
       >
         <View
