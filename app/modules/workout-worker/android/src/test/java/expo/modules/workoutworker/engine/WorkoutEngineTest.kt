@@ -230,6 +230,24 @@ class WorkoutEngineTest {
         assertTrue(finished.exercises[0].supersetWithNext)
     }
 
+    @Test
+    fun `encoded snapshot preserves explicit nulls required by TypeScript schema`() {
+        val encoded = WorkoutEngine.encodeSnapshot(snapshot())
+
+        assertTrue(encoded.contains("\"restTimerStartTime\":null"))
+        assertTrue(encoded.contains("\"restTimerEndTime\":null"))
+        assertTrue(encoded.contains("\"error\":null"))
+        assertTrue(encoded.contains("\"reps\":null"))
+        assertTrue(encoded.contains("\"completionDateTime\":null"))
+        assertTrue(encoded.contains("\"durationSeconds\":null"))
+        assertTrue(encoded.contains("\"distanceValue\":null"))
+        assertTrue(encoded.contains("\"distanceUnit\":null"))
+        assertTrue(encoded.contains("\"resistance\":null"))
+        assertTrue(encoded.contains("\"incline\":null"))
+        assertTrue(encoded.contains("\"steps\":null"))
+        assertTrue(encoded.contains("\"currentBlockStartTime\":null"))
+    }
+
     @OptIn(ExperimentalStdlibApi::class)
     private fun loadParityFixture(): WorkoutEngineParityFixture {
         val fixtureFile = findFixtureFile()
