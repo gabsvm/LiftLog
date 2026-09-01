@@ -40,6 +40,6 @@ jobs:
         run: npm run prebuild
         working-directory: ./app
 
-      - name: Build optimized Android release
-        run: ./gradlew assembleRelease
+      - name: Build optimized Android release (arm64-v8a)
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
         working-directory: ./app/android
