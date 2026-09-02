@@ -5,8 +5,8 @@ import {
 } from '@/utils/locale-bignumber';
 import { T, useTranslate } from '@tolgee/react';
 import BigNumber from 'bignumber.js';
-import { ReactNode, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { InteractionManager, TextInput as NativeTextInput, View } from 'react-native';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import {
@@ -20,6 +20,7 @@ import { shortFormatWeightUnit, Weight, WeightUnit } from '@/models/weight';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
+import { scheduleDeferredInputFocus } from './deferred-input-focus';
 
 type WeightDialogProps = {
   open: boolean;
@@ -45,6 +46,7 @@ export default function WeightDialog(props: WeightDialogProps) {
   const theme = useTheme();
   const { t } = useTranslate();
   const preferredWeightUnit = usePreferredWeightUnit();
+  const inputRef = useRef<NativeTextInput>(null);
   const [text, setText] = useState(localeFormatBigNumber(props.weight?.value));
   const [editorWeightValue, setEditorWeightValue] = useState<
     BigNumber | undefined
@@ -58,6 +60,13 @@ export default function WeightDialog(props: WeightDialogProps) {
     setEditorWeightValue(props.weight?.value);
     setEditorWeightUnit(props.weight?.unit ?? preferredWeightUnit);
   }, [preferredWeightUnit, props.open, props.weight]);
+
+  useEffect(() => {
+    if (!props.open) return;
+    return scheduleDeferredInputFocus(inputRef, (callback) =>
+      InteractionManager.runAfterInteractions(callback),
+    );
+  }, [props.open]);
 
   const nonZeroIncrement = props.increment.isZero()
     ? new BigNumber('2.5')
@@ -138,6 +147,7 @@ export default function WeightDialog(props: WeightDialogProps) {
                   }}
                 >
                   <TextInput
+                    ref={inputRef}
                     testID="weight-input"
                     selectTextOnFocus
                     mode="outlined"
@@ -145,7 +155,6 @@ export default function WeightDialog(props: WeightDialogProps) {
                     keyboardType="decimal-pad"
                     submitBehavior="blurAndSubmit"
                     returnKeyType="done"
-                    autoFocus
                     value={text}
                     onChangeText={handleTextChange}
                     style={{
