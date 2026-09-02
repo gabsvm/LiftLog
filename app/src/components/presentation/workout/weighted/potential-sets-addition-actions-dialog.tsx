@@ -1,13 +1,14 @@
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { PotentialSet } from '@/models/session-models';
 import { T } from '@tolgee/react';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { InteractionManager, TextInput as NativeTextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import IconButton from '@/components/presentation/foundation/gesture-wrappers/icon-button';
 import { Portal, Text, TextInput } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/gesture-wrappers/button';
 import { GainsLabDialog } from '@/components/presentation/foundation/gainslab-overlays';
+import { scheduleDeferredInputFocus } from '@/components/presentation/foundation/editors/deferred-input-focus';
 
 interface PotentialSetAdditionalActionsDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ export default function PotentialSetAdditionalActionsDialog({
   repTarget,
 }: PotentialSetAdditionalActionsDialogProps) {
   const { colors } = useAppTheme();
+  const inputRef = useRef<NativeTextInput>(null);
   const originalReps = set?.set?.repsCompleted;
 
   const [repCountText, setRepCountText] = useState<string>(
@@ -36,6 +38,13 @@ export default function PotentialSetAdditionalActionsDialog({
   useEffect(() => {
     setRepCountText(originalReps?.toString() ?? '');
   }, [originalReps]);
+
+  useEffect(() => {
+    if (!open) return;
+    return scheduleDeferredInputFocus(inputRef, (callback) =>
+      InteractionManager.runAfterInteractions(callback),
+    );
+  }, [open]);
 
   const save = () => {
     if (!isValid) {
@@ -58,13 +67,13 @@ export default function PotentialSetAdditionalActionsDialog({
             </GainsLabDialog.Title>
             <GainsLabDialog.Content>
               <TextInput
+                ref={inputRef}
                 label={<T keyName="exercise.reps.label" />}
                 inputMode="numeric"
                 value={repCountText}
                 selectTextOnFocus
                 error={!isValid}
                 onChangeText={setRepCountText}
-                autoFocus
               />
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
