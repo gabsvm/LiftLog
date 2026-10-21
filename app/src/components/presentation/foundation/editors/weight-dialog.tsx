@@ -2,8 +2,8 @@ import { spacing } from '@/hooks/useAppTheme';
 import { localeFormatBigNumber, localeParseBigNumber } from '@/utils/locale-bignumber';
 import { T, useTranslate } from '@tolgee/react';
 import BigNumber from 'bignumber.js';
-import { ReactNode } from 'react';
-import { View } from 'react-native';
+import { ReactNode, useEffect, useRef } from 'react';
+import { InteractionManager, TextInput as NativeTextInput, View } from 'react-native';
 import IconButton from '@/components/presentation/foundation/icon-button';
 import Button from '@/components/presentation/foundation/button';
 import { Dialog, Portal, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
@@ -11,6 +11,7 @@ import { shortFormatWeightUnit, Weight, WeightUnit } from '@/models/weight';
 import { usePreferredWeightUnit } from '@/hooks/usePreferredWeightUnit';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useDerivedState } from '@/hooks/useDerivedState';
+import { scheduleDeferredInputFocus } from './deferred-input-focus';
 
 type WeightDialogProps = {
   open: boolean;
@@ -36,6 +37,12 @@ export default function WeightDialog(props: WeightDialogProps) {
   const theme = useTheme();
   const { t } = useTranslate();
   const preferredWeightUnit = usePreferredWeightUnit();
+  const inputRef = useRef<NativeTextInput>(null);
+
+  useEffect(() => {
+    if (!props.open) return;
+    return scheduleDeferredInputFocus(inputRef, (callback) => InteractionManager.runAfterInteractions(callback));
+  }, [props.open]);
   const [text, setText] = useDerivedState(localeFormatBigNumber(props.weight?.value));
   const [editorWeightValue, setEditorWeightValue] = useDerivedState<BigNumber | undefined>(props.weight?.value);
   const [editorWeightUnit, setEditorWeightUnit] = useDerivedState<WeightUnit>(
@@ -114,6 +121,7 @@ export default function WeightDialog(props: WeightDialogProps) {
                   }}
                 >
                   <TextInput
+                    ref={inputRef}
                     testID="weight-input"
                     selectTextOnFocus
                     mode="outlined"
@@ -121,7 +129,6 @@ export default function WeightDialog(props: WeightDialogProps) {
                     keyboardType="decimal-pad"
                     submitBehavior="blurAndSubmit"
                     returnKeyType="done"
-                    autoFocus
                     value={text}
                     onChangeText={handleTextChange}
                     style={{

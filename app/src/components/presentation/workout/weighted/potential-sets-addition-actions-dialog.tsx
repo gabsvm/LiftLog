@@ -1,12 +1,14 @@
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { PotentialSet } from '@/models/session-models';
 import { T } from '@tolgee/react';
-import { View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { InteractionManager, TextInput as NativeTextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import IconButton from '@/components/presentation/foundation/icon-button';
 import { Dialog, Portal, Text, TextInput } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/button';
 import { useDerivedState } from '@/hooks/useDerivedState';
+import { scheduleDeferredInputFocus } from '@/components/presentation/foundation/editors/deferred-input-focus';
 
 interface PotentialSetAdditionalActionsDialogProps {
   open: boolean;
@@ -24,6 +26,12 @@ export default function PotentialSetAdditionalActionsDialog({
   repTarget,
 }: PotentialSetAdditionalActionsDialogProps) {
   const { colors } = useAppTheme();
+  const inputRef = useRef<NativeTextInput>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    return scheduleDeferredInputFocus(inputRef, (callback) => InteractionManager.runAfterInteractions(callback));
+  }, [open]);
   const originalReps = set?.set?.repsCompleted;
 
   const [repCountText, setRepCountText] = useDerivedState(originalReps, (r) => r?.toString() ?? '');
@@ -48,13 +56,13 @@ export default function PotentialSetAdditionalActionsDialog({
             </Dialog.Title>
             <Dialog.Content>
               <TextInput
+                ref={inputRef}
                 label={<T keyName="exercise.reps.label" />}
                 inputMode="numeric"
                 value={repCountText}
                 selectTextOnFocus
                 error={!isValid}
                 onChangeText={setRepCountText}
-                autoFocus
               />
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
