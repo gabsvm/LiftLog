@@ -23,6 +23,17 @@ It is not an official release or an upstream roadmap.
 
 ## Android experimental builds
 
+The experimental app is branded **LiftLog Lab** and uses Android package
+`com.gabsvm.liftlog.lab`. It can be installed alongside the official LiftLog,
+with separate application data. Historical builds of this fork used the official
+package identifier; they are not directly upgradable to the new lab package.
+Do not uninstall any existing app before verifying your workout backups.
+
+The upstream release workflow supplies a RevenueCat API key, but the open-source
+fork's experimental workflow does not. Lab builds skip optional billing
+initialization when the key is missing, allowing settings and workouts to load.
+Purchases and premium subscriptions are not configured in these lab builds.
+
 The official upstream `Build Android` workflow runs `./gradlew build`, which triggers
 `:react-native-worklets:lintAnalyzeDebug`. On upstream and the fork this currently
 fails with a Kotlin UAST/KaModule error unrelated to the experimental UI changes.
@@ -36,7 +47,7 @@ Download its `liftlog-lab-android-apk` artifact from Actions once the job succee
 **Signing:** the Expo-generated Android project's default signing configuration
 must be inspected in each build. Treat experimental artifacts as untrusted test
 builds, not as upgrades or production distributions. Back up workout data before
-installing. The test APK may not update the official app because signing differs.
+installing. The lab APK has a different package ID and cannot update the official app.
 
 ## Device validation checklist
 
