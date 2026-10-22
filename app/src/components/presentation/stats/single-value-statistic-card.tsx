@@ -21,6 +21,7 @@ export default function SingleValueStatisticCard(props: {
           style={{
             gap: spacing[1],
             padding: spacing[4],
+            minHeight: 112,
           }}
         >
           <View
@@ -31,11 +32,13 @@ export default function SingleValueStatisticCard(props: {
             }}
           >
             <Icon size={16} source={props.icon} color={colors.primary} />
-            <Text variant="labelLarge" lineBreakMode="tail" numberOfLines={1}>
+            <Text variant="labelLarge" numberOfLines={2} style={{ flexShrink: 1 }}>
               {props.title}
             </Text>
           </View>
-          <Text>{props.value}</Text>
+          <Text variant="headlineSmall" style={{ fontVariant: ['tabular-nums'] }}>
+            {props.value}
+          </Text>
         </View>
       </Wrapper>
     </Card>
