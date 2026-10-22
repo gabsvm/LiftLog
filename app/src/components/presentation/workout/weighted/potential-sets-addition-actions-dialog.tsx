@@ -1,14 +1,15 @@
-import { useAppTheme } from '@/hooks/useAppTheme';
+import { spacing, useAppTheme } from '@/hooks/useAppTheme';
 import { PotentialSet } from '@/models/session-models';
 import { T } from '@tolgee/react';
 import { useEffect, useRef } from 'react';
 import { InteractionManager, TextInput as NativeTextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import IconButton from '@/components/presentation/foundation/icon-button';
-import { Dialog, Portal, Text, TextInput } from 'react-native-paper';
+import { Chip, Dialog, Portal, TextInput } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/button';
 import { useDerivedState } from '@/hooks/useDerivedState';
 import { scheduleDeferredInputFocus } from '@/components/presentation/foundation/editors/deferred-input-focus';
+import { getQuickRepOptions } from './quick-rep-options';
 
 interface PotentialSetAdditionalActionsDialogProps {
   open: boolean;
@@ -36,7 +37,8 @@ export default function PotentialSetAdditionalActionsDialog({
 
   const [repCountText, setRepCountText] = useDerivedState(originalReps, (r) => r?.toString() ?? '');
   const parsedRepCount = Number(repCountText);
-  const isValid = !repCountText || (Number.isInteger(parsedRepCount) && parsedRepCount >= 0);
+  const isValid = !repCountText || (Number.isSafeInteger(parsedRepCount) && parsedRepCount >= 0);
+  const quickRepOptions = getQuickRepOptions(repTarget, isValid && repCountText ? parsedRepCount : undefined);
 
   const save = () => {
     if (!isValid) {
@@ -65,18 +67,33 @@ export default function PotentialSetAdditionalActionsDialog({
                 onChangeText={setRepCountText}
               />
 
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                {Array.from({ length: repTarget + 3 }).map((_, i) => (
-                  <IconButton
-                    key={i}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: spacing[1],
+                  paddingTop: spacing[2],
+                }}
+              >
+                {quickRepOptions.map((count) => (
+                  <Chip
+                    key={count}
                     mode="outlined"
-                    icon={() => <Text>{i}</Text>}
+                    compact
+                    selected={repCountText === String(count)}
+                    showSelectedCheck={false}
+                    selectedColor={colors.primary}
+                    testID={`quick-reps-${count}`}
+                    style={{ minHeight: 48, justifyContent: 'center' }}
                     onPress={() => {
-                      setRepCountText(i.toString());
-                      updateRepCount(i);
+                      setRepCountText(String(count));
+                      updateRepCount(count);
                       close();
                     }}
-                  />
+                  >
+                    {count}
+                  </Chip>
                 ))}
                 <IconButton
                   mode="contained"
