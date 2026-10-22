@@ -14,7 +14,7 @@ import { fetchOverallStats, selectExerciseView, setOverallViewTime, WeightedExer
 import { T, useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router/build/hooks';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useCallback, useEffect } from 'react';
 import { View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
@@ -24,9 +24,11 @@ export default function ExpandedExercisePage() {
   const timePeriod = useAppSelector((x) => x.stats.overallViewTime);
   const { exerciseName } = useLocalSearchParams<{ exerciseName: string }>();
   const { dismissTo } = useRouter();
-  useFocusEffect(() => {
-    dispatch(fetchOverallStats());
-  });
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchOverallStats());
+    }, [dispatch]),
+  );
   useEffect(() => {
     if (!exerciseName) {
       dismissTo('/stats');
