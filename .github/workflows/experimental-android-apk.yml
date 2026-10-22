@@ -1,0 +1,63 @@
+name: Experimental Android APK
+
+on:
+  push:
+    branches:
+      - lab/liftlog-next
+    paths:
+      - app/**
+      - .github/workflows/experimental-android-apk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Bundle and package experimental APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: app
+
+      - name: Generate Android project
+        run: npm run prebuild
+        working-directory: app
+
+      # 'gradlew build' also invokes lintAnalyzeDebug. Upstream CI currently
+      # fails inside react-native-worklets' Android Lint on a Kotlin KaModule error.
+      # We keep that original CI intact, and separately validate packaging here.
+      - name: Bundle JS and assemble APK
+        run: ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+        working-directory: app/android
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: liftlog-lab-android-apk
+          path: app/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
