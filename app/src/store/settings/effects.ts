@@ -27,6 +27,7 @@ import Purchases from 'react-native-purchases';
 import { I18nManager, Platform } from 'react-native';
 import { detectLanguageFromDateLocale } from '@/utils/language-detector';
 import { supportedLanguages } from '@/services/tolgee';
+import { configurePurchasesIfAvailable } from '@/utils/configure-purchases';
 import { initializeStoredSessionsStateSlice } from '@/store/stored-sessions';
 import { builtInBackendId } from '@/models/backend';
 
@@ -78,19 +79,24 @@ export function applySettingsEffects(addEffect: AddEffectFn) {
       const proToken = await preferenceService.getProToken();
       dispatch(setProToken(proToken));
 
-      if (!__DEV__) {
-        if (Platform.OS === 'ios') {
-          Purchases.configure({
-            apiKey: process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY!,
-          });
-        } else if (Platform.OS === 'android') {
-          Purchases.configure({
-            apiKey: process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY!,
-          });
-        }
-      }
-      // migrate pro token to a revenuecat
-      if (proToken && !proToken.startsWith('$RCAnonymousID')) {
+      // Public/experimental builds do not necessarily have RevenueCat keys.
+      // Purchases must not prevent local settings and workouts from loading.
+      const revenueCatApiKey =
+        Platform.OS === 'ios'
+          ? process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY
+          : Platform.OS === 'android'
+            ? process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY
+            : undefined;
+      const purchasesConfigured = !__DEV__
+        ? await configurePurchasesIfAvailable(
+            revenueCatApiKey,
+            (apiKey) => Purchases.configure({ apiKey }),
+            (message, error) => logger.error(message, error),
+          )
+        : false;
+
+      // Migrate legacy pro tokens only when RevenueCat initialized successfully.
+      if (purchasesConfigured && proToken && !proToken.startsWith('$RCAnonymousID')) {
         try {
           const customerInfo = await Purchases.getCustomerInfo();
           await Purchases.syncPurchases();
