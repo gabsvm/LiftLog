@@ -11,7 +11,6 @@ interface CardListProps<T> extends ViewProps {
 
   onPress?: (item: T, index: number) => void;
   onLongPress?: (item: T, index: number) => void;
-  shouldHighlight?: (item: T, index: number) => boolean;
   cardStyle?: CardProps['style'];
   cardType: 'elevated' | 'outlined' | 'contained';
   keySelector?: (item: T) => Key;
@@ -26,7 +25,6 @@ export default function CardList<T>(props: CardListProps<T>) {
     renderItemTitle,
     onPress,
     onLongPress,
-    shouldHighlight,
     cardStyle,
     cardType,
     keySelector,
@@ -58,7 +56,7 @@ export default function CardList<T>(props: CardListProps<T>) {
         return (
           <Card
             key={keySelector?.(item) ?? i}
-            style={[cardStyle, shouldHighlight?.(item, i) ? highlightStyle : undefined]}
+            style={cardStyle}
             mode={cardType}
             onLongPress={onLongPress ? () => onLongPress(item, i) : undefined}
             onPress={onPress ? () => onPress(item, i) : undefined}
@@ -70,5 +68,3 @@ export default function CardList<T>(props: CardListProps<T>) {
     </View>
   );
 }
-
-const highlightStyle = {};
