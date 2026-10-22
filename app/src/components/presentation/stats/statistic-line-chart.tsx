@@ -37,8 +37,15 @@ export function StatisticLineChart<T>({
   // On android the area chart renders poorly unless it is delayed until after initial render
   const [areaChart, setAreaChart] = useState(false);
   useEffect(() => {
-    setTimeout(() => setAreaChart(!!width), 0);
-  }, [width, setAreaChart]);
+    if (!width) {
+      setAreaChart(false);
+      return;
+    }
+    // Let the initial layout finish before enabling the area fill on Android.
+    // Cancel the frame if a chart unmounts or changes width before it runs.
+    const frame = requestAnimationFrame(() => setAreaChart(true));
+    return () => cancelAnimationFrame(frame);
+  }, [width]);
   return (
     <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <LineChart
