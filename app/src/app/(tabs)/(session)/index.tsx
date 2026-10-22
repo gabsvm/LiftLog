@@ -23,7 +23,7 @@ import { executeRemoteBackup } from '@/store/settings';
 import { LocalDate } from '@js-joda/core';
 import { T, useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { Card, Icon as PaperIcon, Text, Tooltip } from 'react-native-paper';
 import Button from '@/components/presentation/foundation/button';
@@ -233,11 +233,13 @@ export default function Index() {
   const currentBodyweight = upcomingSessions.map((x) => x.at(0)?.bodyweight).unwrapOr(undefined);
   const { start, confirmationDialog } = useStartWorkoutWithConfirmation();
 
-  useFocusEffect(() => {
-    dispatch(fetchUpcomingSessions());
-    dispatch(publishUnpublishedSessions());
-    dispatch(executeRemoteBackup({}));
-  });
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchUpcomingSessions());
+      dispatch(publishUnpublishedSessions());
+      dispatch(executeRemoteBackup({}));
+    }, [dispatch]),
+  );
 
   const createFreeformSession = () => {
     start(Session.freeformSession(LocalDate.now(), currentBodyweight));

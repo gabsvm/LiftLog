@@ -6,15 +6,18 @@ import { fetchOverallStats, selectOverallView, WeightedExerciseStatistics } from
 import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 
 export default function ExerciseListPage() {
   const { t } = useTranslate();
   const dispatch = useDispatch();
   const { dismiss, push } = useRouter();
-  useFocusEffect(() => {
-    dispatch(fetchOverallStats());
-  });
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchOverallStats());
+    }, [dispatch]),
+  );
   const stats = useAppSelector(selectOverallView);
 
   const onItemPress = (item: WeightedExerciseStatistics) => {

@@ -15,7 +15,7 @@ import { fetchOverallStats, GranularStatisticView, selectOverallView, setOverall
 import { formatDuration } from '@/utils/format-date';
 import { useTranslate } from '@tolgee/react';
 import { Stack, useFocusEffect } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { useDispatch } from 'react-redux';
@@ -25,9 +25,11 @@ export default function StatsPage() {
   const { t } = useTranslate();
   const timePeriod = useAppSelector((x) => x.stats.overallViewTime);
   const dispatch = useDispatch();
-  useFocusEffect(() => {
-    dispatch(fetchOverallStats());
-  });
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchOverallStats());
+    }, [dispatch]),
+  );
   const stats = useAppSelector(selectOverallView);
   return (
     <FullHeightScrollView contentContainerStyle={{ gap: spacing[2] }}>
